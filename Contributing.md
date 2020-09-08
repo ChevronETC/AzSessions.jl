@@ -18,7 +18,7 @@ git:
   2. create an appropriately titled branch for your contribution
   3. if applicable, add a unit-test to ensure the functionality of your contribution
   (see the `test` subfolder).
-  4. run `julia runtests.jl` in the `test` folder
+  4. run `]test AzSessions`
   5. make a pull-request
   6. have fun
 
