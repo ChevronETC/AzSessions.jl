@@ -6,3 +6,5 @@ code flow.
 
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://ChevronETC.github.io/AzSessions.jl/stable)
 [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://ChevronETC.github.io/AzSessions.jl/dev)
+[![](https://travis-ci.org/ChevronETC/AzSessions.jl.svg?branch=master)](https://travis-ci.org/ChevronETC/AzSessions.jl)
+[![](https://coveralls.io/repos/github/ChevronETC/AzSessions.jl/badge.svg?branch=master)](https://coveralls.io/github/ChevronETC/AzSessions.jl?branch=master)
