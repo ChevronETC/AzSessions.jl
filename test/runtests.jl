@@ -13,7 +13,7 @@ function running_on_azure()
 end
 
 if running_on_azure()
-    # TODO ... this seems to break CI
+    # TODO
     @test_skip @testset "AzSessions, VM" begin
         session = AzSession(;protocal=AzVMCredentials)
         @test now(Dates.UTC) >= session.expiry
@@ -334,4 +334,70 @@ end
     for scope in scopes
         @test scope  ∈ ["openid","offline_access","https://management.azure.com/user_impersonation","https://storage.azure.com/user_impersonation"]
     end
+end
+
+@testset "AzSessions, VM credentials, scrub" begin
+    session = AzSessions.AzClientCredentialsSession(
+            "AzClientCredentials",
+            "myclientid",
+            "myclientsecret",
+            now(),
+            "myresource",
+            "mytenant",
+            "mytoken")
+
+    scrub!(session)
+
+    @test session.client_secret == ""
+    @test session.token == ""
+end
+
+@testset "AzSessions, Auth code flow, scrub" begin
+    session = AzSessions.AzAuthCodeFlowSession(
+        "AzAuthCodeFlowCredentials",
+        "clientid",
+        now(),
+        "myidtoken",
+        false,
+        "redirecturi",
+        "refreshtoken",
+        "scopeauth",
+        "scopetoken",
+        "tenant",
+        "token")
+
+    scrub!(session)
+
+    @test session.id_token == ""
+    @test session.refresh_token == ""
+    @test session.token == ""
+end
+
+@testset "AzSessions, Device code flow, scrub" begin
+    session = AzSessions.AzDeviceCodeFlowSession(
+        "AzDeviceCodeFlowCredentials",
+        "myclientid",
+        now(),
+        "myidtoken",
+        true,
+        "myrefreshtoken",
+        "myscope",
+        "myscope_auth",
+        "mytenant",
+        "mytoken")
+
+    scrub!(session)
+
+    @test session.id_token == ""
+    @test session.refresh_token == ""
+    @test session.token == ""
+end
+
+@testset "AzSessions, write_manifest" begin
+    AzSessions.write_manifest(;client_id="myclientid", client_secret="myclientsecret", tenant="mytenant")
+
+    manifest = JSON.parse(read(AzSessions.manifestfile(), String))
+    @test manifest["client_id"] == "myclientid"
+    @test manifest["client_secret"] == "myclientsecret"
+    @test manifest["tenant"] == "mytenant"
 end
