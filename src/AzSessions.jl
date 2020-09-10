@@ -800,7 +800,7 @@ requiring re-authentication.  Note that the new scope must be in `session.scope_
 session = AzSession(;
     protocal=AzAuthCodeFlowCredentials,
     scope_auth="openid+offline_access+https://management.azure.com/user_impersonation+https://storage.azure.com/user_impersonation",
-    scope="openid+offline_access+https://management.azure.com/user_impersonation)
+    scope="openid+offline_access+https://management.azure.com/user_impersonation")
 
 t = token(session) # token for `https://management.azure.com` audience
 session = AzSession(session; scope="openid+offline_access+https://storage.azure.com/user_impersonation")
