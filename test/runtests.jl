@@ -1,5 +1,8 @@
 using AzSessions, Dates, HTTP, JSON, JSONWebTokens, Test
 
+credentials = JSON.parse(ENV["AZURE_CREDENTIALS"])
+AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"])
+
 function running_on_azure()
     try
         HTTP.request(
@@ -13,10 +16,10 @@ function running_on_azure()
 end
 
 if running_on_azure()
-    # TODO
+    # TODO - not sure why this doesn't work on CI
     @test_skip @testset "AzSessions, VM" begin
         session = AzSession(;protocal=AzVMCredentials)
-        @test now(Dates.UTC) >= session.expiry
+        @test now(Dates.UTC) <= session.expiry
         t = token(session)
         @test isa(t,String)
         t2 = token(session)
@@ -29,10 +32,9 @@ if running_on_azure()
     end
 end
 
-# TODO: requires user interaction (can we use Mocking.jl)
-@test_skip @testset "AzSessions, Client Credentials" begin
-    session = AzSession(;protocal=AzClientCredentials)
-    @test now(Dates.UTC) >= session.expiry
+@testset "AzSessions, Client Credentials" begin
+    session = AzSession(;protocal=AzClientCredentials, client_id=credentials["clientId"], client_secret=credentials["clientSecret"])
+    @test now(Dates.UTC) < session.expiry
     t = token(session)
     @test isa(t,String)
     t2 = token(session)
