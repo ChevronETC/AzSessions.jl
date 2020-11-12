@@ -12,6 +12,14 @@ manifestfile() = joinpath(manifestpath(), "manifest.json")
 
 Write an AzSessions manifest file (~/.azsessions/manifest.json).  The
 manifest file contains account specific credentials.
+
+Note that the client can be configured such that the `client_secret` is not
+required for the authorization-code-flow and device-code-flow.  In this
+scenario, one may choose to omit setting the `client_secret` in the manifest.
+For example:
+```julia
+AzSessions.write_manifest(;client_id="myclientid", tenant="mytenant")
+```
 """
 function write_manifest(;client_id="", client_secret = "", tenant="")
     manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant)
