@@ -115,9 +115,10 @@ mutable struct AzClientCredentialsSession <: AzSessionAbstract
 end
 function AzClientCredentialsSession(;
         client_id = _manifest["client_id"],
-        client_secret,
+        client_secret = _manifest["client_secret"],
         resource = "https://management.azure.com/",
         tenant = _manifest["tenant"])
+    client_secret == "" && error("AzClientCredentials requires client_secret, but got client_secret=\"\"")
     AzClientCredentialsSession(string(AzClientCredentials), client_id, client_secret, now(Dates.UTC), resource, tenant, "")
 end
 function AzClientCredentialsSession(d::Dict)
