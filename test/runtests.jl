@@ -18,7 +18,7 @@ end
 if running_on_azure()
     # TODO - not sure why this doesn't work on CI
     @test_skip @testset "AzSessions, VM" begin
-        session = AzSession(;protocal=AzVMCredentials)
+        session = AzSession(;protocol=AzVMCredentials)
         @test now(Dates.UTC) <= session.expiry
         t = token(session)
         @test isa(t,String)
@@ -33,7 +33,7 @@ if running_on_azure()
 end
 
 @testset "AzSessions, Client Credentials" begin
-    session = AzSession(;protocal=AzClientCredentials, client_id=credentials["clientId"], client_secret=credentials["clientSecret"])
+    session = AzSession(;protocol=AzClientCredentials, client_id=credentials["clientId"], client_secret=credentials["clientSecret"])
     @test now(Dates.UTC) < session.expiry
     t = token(session)
     @test isa(t,String)
@@ -48,7 +48,7 @@ end
 
 # TODO: requires user interaction (can we use Mocking.jl)
 @test_skip @testset "AzSessions, Device code flow credentials" begin
-    session = AzSession(;protocal=AzDeviceCodeFlowCredentials)
+    session = AzSession(;protocol=AzDeviceCodeFlowCredentials)
     @test now(Dates.UTC) <= session.expiry
     t = token(session)
     @test isa(t,String)
@@ -68,7 +68,7 @@ end
 
 # TODO - the following testset will only work if the machine can start a web-browser
 @test_skip @testset "AzSessions, Authorization code flow credentials" begin
-    session = AzSession(;protocal=AzAuthCodeFlowCredentials)
+    session = AzSession(;protocol=AzAuthCodeFlowCredentials)
     @test now(Dates.UTC) <= session.expiry
     t = token(session)
     @test isa(t,String)
@@ -114,7 +114,7 @@ end
     jsonsession = json(session)
     _session = AzSession(jsonsession)
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.client_secret == _session.client_secret
     @test session.expiry == _session.expiry
@@ -123,7 +123,7 @@ end
     @test session.token == _session.token
 
     _session = AzSession(JSON.parse(jsonsession))
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.client_secret == _session.client_secret
     @test session.expiry == _session.expiry
@@ -142,7 +142,7 @@ end
     jsonsession = json(session)
     _session = AzSession(jsonsession)
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.expiry == _session.expiry
     @test session.resource == _session.resource
     @test session.token == _session.token
@@ -165,7 +165,7 @@ end
     jsonsession = json(session)
     _session = AzSession(jsonsession)
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
@@ -179,7 +179,7 @@ end
 
     _session = AzSession(JSON.parse(jsonsession))
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
@@ -208,7 +208,7 @@ end
     jsonsession = json(session)
     _session = AzSession(jsonsession)
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
@@ -221,7 +221,7 @@ end
 
     _session = AzSession(JSON.parse(jsonsession))
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
@@ -244,7 +244,7 @@ end
         "mytoken")
 
     _session = copy(session)
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.client_secret == _session.client_secret
     @test session.expiry == _session.expiry
@@ -262,7 +262,7 @@ end
 
     _session = copy(session)
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.expiry == _session.expiry
     @test session.resource == _session.resource
     @test session.token == _session.token
@@ -284,7 +284,7 @@ end
 
     _session = copy(session)
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
@@ -312,7 +312,7 @@ end
 
     _session = copy(session)
 
-    @test session.protocal == _session.protocal
+    @test session.protocol == _session.protocol
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
