@@ -2,27 +2,33 @@ module AzSessions
 
 using Base64, Dates, HTTP, JSON, JSONWebTokens, MbedTLS, Sockets
 
-const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"", "auth"=>"")
+const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"", "protocal"=>"")
 
 manifestpath() = joinpath(homedir(), ".azsessions")
 manifestfile() = joinpath(manifestpath(), "manifest.json")
 
 """
-    AzSessions.write_manifest(;client_id="", client_secret="", tenant="")
+    AzSessions.write_manifest(;client_id="", client_secret="", tenant="", protocal="")
 
 Write an AzSessions manifest file (~/.azsessions/manifest.json).  The
 manifest file contains account specific credentials.
 
-Note that the client can be configured such that the `client_secret` is not
+# Notes
+* The client can be configured such that the `client_secret` is not
 required for the authorization-code-flow and device-code-flow.  In this
 scenario, one may choose to omit setting the `client_secret` in the manifest.
 For example:
 ```julia
 AzSessions.write_manifest(;client_id="myclientid", tenant="mytenant")
 ```
+
+* The protocal is one of "AzAuthCodeFlowCredentials", "AzDeviceCodeFlowCredentials", "AzClientCredentials"
+and "AzVMCredentials".  If the default `protocal=""` is chosen for the manifest, then `AzSession()` will
+default to `AzDeviceCodeFlowCredentials`.  The protocal in the manifest can always be over-ridden using
+the `protocal` argument to `AzSession`.
 """
-function write_manifest(;client_id="", client_secret = "", tenant="", auth="")
-    manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant, "auth"=>string(auth))
+function write_manifest(;client_id="", client_secret = "", tenant="", protocal="")
+    manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant, "protocal"=>string(protocal))
     try
         isdir(manifestpath()) || mkdir(manifestpath(); mode=0o700)
         write(manifestfile(), json(manifest, 1))
@@ -642,6 +648,14 @@ end
 
 Base.show(io::IO, session::AzDeviceCodeFlowSession) = write(io, "Azure device code flow credentials session")
 
+function AzCredentials(protocal::AbstractString)
+    protocals = Dict("AzClientCredentials"=>AzClientCredentials, "AzDeviceCodeCredentials"=>AzDeviceCodeFlowCredentials, "AzAuthCodeFlowCredentials"=>AzAuthCodeFlowCredentials, "AzVMCredentials"=>AzVMCredentials, ""=>nothing)
+    if !haskey(protocals, protocal)
+        error("Authentication protocal, $protocal, is not recognized.")
+    end
+    protocals[protocal]
+end
+
 #
 # Recording sessions to disk
 #
@@ -760,7 +774,7 @@ protocal.  The available protocals and their `kwargs` are as follows.
 ## Authorization code flow
 ```julia
 session = AzSession(;
-    protocal = AzAuthCodeFlowCredentials, # default, so can be ommitted.
+    protocal = _manifest["protocal"] | AzDeviceCodeFlowCredentials, # default, so can be ommitted.
     client_id = AzSessions._manifest["client_id"],
     redirect_uri = "http://localhost:44300/reply",
     scope = "openid+offline_access+https://storage.azure.com/user_impersonation",
@@ -773,7 +787,7 @@ session = AzSession(;
 ## Device code flow
 ```julia
 session = AzSession(;
-    protocal = AzDeviceCodeCredentials,  # default, so can be ommitted.
+    protocal = AzDeviceCodeCredentials
     client_id = AzSessions._manifest["client_id"],
     scope = "openid+offline_access+https://management.azure.com/user_impersonation",
     scope_auth = "openid+offline_access+https://management.azure.com/user_impersonation+https://storage.azure.com/user_impersonation",
@@ -818,10 +832,12 @@ t = token(session) # token for `https://storage.azure.com` audience without need
 # Notes
 * If `lazy=false`, then authenticate at the time of construction.  Otherwise, wait until the first use of the session before authenticating.
 * If `clearcache=false`, then check the session-cache for an existing token rather than re-authenticating.  The cache is stored in a JSON file (`~/.azsessions/sessions.json`).
+* The default protocal can be set in the manifest (see the `AzSessions.write_manifest` method for more information).
 """
-function AzSession(; protocal=AzDeviceCodeFlowCredentials, lazy=false, clearcache=false, kwargs...)
+function AzSession(; protocal=nothing, lazy=false, clearcache=false, kwargs...)
     load_manifest()
-    ~isempty(_manifest["auth"]) && (protocal = _protocals[_manifest["auth"]])
+    protocal == nothing && (protocal = AzCredentials(get(_manifest, "protocal", "")))
+    protocal == nothing && (protocal = AzDeviceCodeFlowCredentials)
 
     local session
     if protocal == AzClientCredentials
@@ -842,15 +858,23 @@ function AzSession(; protocal=AzDeviceCodeFlowCredentials, lazy=false, clearcach
 end
 
 function AzSession(d::Dict)
-    protocal = _protocals[pop!(d, "protocal")]
-    AzSession(;protocal=protocal, d)
+    protocal = d["protocal"]
+    if protocal ∈ ("AzClientCredentials", "AzSessions.AzClientCredentials")
+        AzClientCredentialsSession(d)
+    elseif protocal ∈ ("AzVMCredentials", protocal == "AzSessions.AzVMCredentials")
+        AzVMSession(d)
+    elseif protocal ∈ ("AzAuthCodeFlowCredentials", "AzSessions.AzAuthCodeFlowCredentials")
+        AzAuthCodeFlowSession(d)
+    elseif protocal ∈ ("AzDeviceCodeFlowCredentials", "AzSessions.AzDeviceCodeFlowCredentials")
+        AzDeviceCodeFlowSession(d)
+    else
+        error("Unknown credentials protocal: $protocal.")
+    end
 end
 AzSession(jsonobject::String) = AzSession(JSON.parse(jsonobject))
 
 AzSession(session::AzSessionAbstract) = session
 
 export AzAuthCodeFlowCredentials, AzClientCredentials, AzDeviceCodeFlowCredentials, AzSession, AzSessionAbstract, AzVMCredentials, scrub!, token
-
-const _protocals = Dict(s=>a for a = [AzClientCredentials, AzVMCredentials, AzAuthCodeFlowCredentials, AzDeviceCodeFlowCredentials] for s=[string(a), split(string(a), ".")[end]])
 
 end

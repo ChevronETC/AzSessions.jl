@@ -26,3 +26,8 @@ when using the authorization code flow or the device code flow, AzSessions will 
 the `client_id` and the `tenant` but will not use the `client_secret`.The later is
 especially useful if you are working in an environment where your adminstrator does not
 share the `client_secret` with the users.
+
+Note that the manifest can also be used to store your preferred protocal.  For example:
+```julia
+AzSessions.write_manifest(;client_id="myclientid", client_secret="mycientsecret", tenant="mytenant", protocal=AzClientCredentials)
+```
