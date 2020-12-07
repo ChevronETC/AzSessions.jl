@@ -2,7 +2,7 @@ module AzSessions
 
 using Base64, Dates, HTTP, JSON, JSONWebTokens, MbedTLS, Sockets
 
-const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"")
+const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"", "auth"=>"")
 
 manifestpath() = joinpath(homedir(), ".azsessions")
 manifestfile() = joinpath(manifestpath(), "manifest.json")
@@ -21,8 +21,8 @@ For example:
 AzSessions.write_manifest(;client_id="myclientid", tenant="mytenant")
 ```
 """
-function write_manifest(;client_id="", client_secret = "", tenant="")
-    manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant)
+function write_manifest(;client_id="", client_secret = "", tenant="", auth="")
+    manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant, "auth"=>string(auth))
     try
         isdir(manifestpath()) || mkdir(manifestpath(); mode=0o700)
         write(manifestfile(), json(manifest, 1))
@@ -821,6 +821,7 @@ t = token(session) # token for `https://storage.azure.com` audience without need
 """
 function AzSession(; protocal=AzDeviceCodeFlowCredentials, lazy=false, clearcache=false, kwargs...)
     load_manifest()
+    ~isempty(_manifest["auth"]) && (protocal = _protocals[_manifest["auth"]])
 
     local session
     if protocal == AzClientCredentials
@@ -841,23 +842,15 @@ function AzSession(; protocal=AzDeviceCodeFlowCredentials, lazy=false, clearcach
 end
 
 function AzSession(d::Dict)
-    protocal = d["protocal"]
-    if protocal ∈ ("AzClientCredentials", "AzSessions.AzClientCredentials")
-        AzClientCredentialsSession(d)
-    elseif protocal ∈ ("AzVMCredentials", protocal == "AzSessions.AzVMCredentials")
-        AzVMSession(d)
-    elseif protocal ∈ ("AzAuthCodeFlowCredentials", "AzSessions.AzAuthCodeFlowCredentials")
-        AzAuthCodeFlowSession(d)
-    elseif protocal ∈ ("AzDeviceCodeFlowCredentials", "AzSessions.AzDeviceCodeFlowCredentials")
-        AzDeviceCodeFlowSession(d)
-    else
-        error("Unknown credentials protocal: $protocal.")
-    end
+    protocal = _protocals[pop!(d, "protocal")]
+    AzSession(;protocal=protocal, d)
 end
 AzSession(jsonobject::String) = AzSession(JSON.parse(jsonobject))
 
 AzSession(session::AzSessionAbstract) = session
 
 export AzAuthCodeFlowCredentials, AzClientCredentials, AzDeviceCodeFlowCredentials, AzSession, AzSessionAbstract, AzVMCredentials, scrub!, token
+
+const _protocals = Dict(s=>a for a = [AzClientCredentials, AzVMCredentials, AzAuthCodeFlowCredentials, AzDeviceCodeFlowCredentials] for s=[string(a), split(string(a), ".")[end]])
 
 end
