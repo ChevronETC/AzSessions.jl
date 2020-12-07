@@ -403,3 +403,20 @@ end
     @test manifest["client_secret"] == "myclientsecret"
     @test manifest["tenant"] == "mytenant"
 end
+
+AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"], protocal="AzClientCredentials")
+@testset "AzSessions, Client Credentials is the default" begin
+    session = AzSession()
+    @test session.protocal == "AzClientCredentials"
+    @test now(Dates.UTC) < session.expiry
+    t = token(session)
+    @test isa(t,String)
+    t2 = token(session)
+    @test t2 == t
+
+    session.token = "x"
+    session.expiry = now(Dates.UTC) - Dates.Second(1)
+    t2 = token(session)
+    @test t2 != "x"
+end
+AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"], protocal="")
