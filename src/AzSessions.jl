@@ -14,7 +14,9 @@ Write an AzSessions manifest file (~/.azsessions/manifest.json).  The
 manifest file contains account specific credentials.
 
 # Notes
-* The client can be configured such that the `client_secret` is not
+
+## client secret
+The client can be configured such that the `client_secret` is not
 required for the authorization-code-flow and device-code-flow.  In this
 scenario, one may choose to omit setting the `client_secret` in the manifest.
 For example:
@@ -22,7 +24,8 @@ For example:
 AzSessions.write_manifest(;client_id="myclientid", tenant="mytenant")
 ```
 
-* The protocal is one of "AzAuthCodeFlowCredentials", "AzDeviceCodeFlowCredentials", "AzClientCredentials"
+## protocal
+The protocal is one of "AzAuthCodeFlowCredentials", "AzDeviceCodeFlowCredentials", "AzClientCredentials"
 and "AzVMCredentials".  If the default `protocal=""` is chosen for the manifest, then `AzSession()` will
 default to `AzDeviceCodeFlowCredentials`.  The protocal in the manifest can always be over-ridden using
 the `protocal` argument to `AzSession`.
