@@ -408,7 +408,7 @@ function token(session::AzAuthCodeFlowSession, bootstrap=false)
                 break
             end
         end
-        HTTP.Response(200, "COFII (AzManagers)")
+        HTTP.Response(200, "Logged in via AzSessions.jl")
     end
 
     authcode_uri = "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/authorize?client_id=$(session.client_id)&response_type=code&redirect_uri=$(session.redirect_uri)&response_mode=query&scope=$(session.scope_auth)&state=$state&prompt=select_account"
