@@ -582,7 +582,10 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false)
     r = JSON.parse(String(_r.body))
 
     device_code = r["device_code"]
+
     @info r["message"]
+    flush(stdout)
+    flush(stderr)
 
     local _r
     while true
