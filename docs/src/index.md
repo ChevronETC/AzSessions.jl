@@ -2,7 +2,9 @@
 
 Authentication for Azure Cloud using Active Directory (OAuth2).  At
 present, this package supports 1) VM credentials, 2) client
-credentials, 3) authorization code flow and 4) device code flow.
+credentials, 3) authorization code flow and 4) device code flow.  In
+addition, we introduce a Token credentials for directly storing and
+using a token/refresh token pair.
 
 ## Setup
 

@@ -256,6 +256,83 @@ function mergescopes(scope1, scope2)
 end
 
 #
+# Token session
+#
+struct AzTokenCredentials end
+mutable struct AzTokenSession <: AzSessionAbstract
+    protocal::String
+    token::String
+    refresh_token::String
+    client_id::String
+    expiry::DateTime
+    scope::String
+    tenant::String
+end
+function AzTokenSession(;
+        token,
+        refresh_token)
+    claims = JSONWebTokens.decode(JSONWebTokens.None(), token)
+
+    AzTokenSession(
+        "AzTokenCredentials",
+        token,
+        refresh_token,
+        claims["appid"],
+        unix2datetime(claims["exp"]),
+        "offline_access+"*claims["aud"]*"/"*claims["scp"],
+        claims["tid"])
+end
+function AzTokenSession(d::Dict)
+    AzTokenSession(;
+        token = get(d, "token", ""),
+        refresh_token = get(d, "refresh_token", "")
+    )
+end
+
+function Base.copy(session::AzTokenSession)
+    AzTokenSession(
+        session.protocal,
+        session.token,
+        session.refresh_token,
+        session.client_id,
+        session.expiry,
+        session.scope,
+        session.tenant)
+end
+
+function samesession(session1::AzTokenSession, session2::AzTokenSession)
+    session1.protocal == session2.protocal &&
+        session1.client_id == session2.client_id &&
+        samescope(session1.scope, session2.scope) &&
+        session1.tenant == session2.tenant
+end
+
+session_has_tokens(session::AzTokenSession) = session.token != "" && session.refresh_token != ""
+
+function update_session_from_cached_session!(session::AzTokenSession, cached_session::AzTokenSession)
+    session.expiry = cached_session.expiry
+    session.refresh_token = cached_session.refresh_token
+    session.token = cached_session.token
+end
+
+function token(session::AzTokenSession)
+    if now(Dates.UTC) < session.expiry
+        return session.token
+    end
+
+    refresh_token(session)
+    return session.token
+end
+
+function scrub!(session::AzTokenSession)
+    session.token = ""
+    session.refresh_token = ""
+    session
+end
+
+Base.show(io::IO, session::AzTokenSession) = write(io, "Azure token session")
+
+#
 # Authorization code flow credentials
 #
 struct AzAuthCodeFlowCredentials end
@@ -620,7 +697,7 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false)
     session.token
 end
 
-function refresh_token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSession})
+function refresh_token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSession, AzTokenSession})
     resource = audience_from_scope(session.scope)
     body = "client_id=$(session.client_id)&refresh_token=$(session.refresh_token)&grant_type=refresh_token&scope=$(session.scope)&resource=$resource"
 
@@ -655,7 +732,7 @@ end
 Base.show(io::IO, session::AzDeviceCodeFlowSession) = write(io, "Azure device code flow credentials session")
 
 function AzCredentials(protocal::AbstractString)
-    protocals = Dict("AzClientCredentials"=>AzClientCredentials, "AzDeviceCodeCredentials"=>AzDeviceCodeFlowCredentials, "AzAuthCodeFlowCredentials"=>AzAuthCodeFlowCredentials, "AzVMCredentials"=>AzVMCredentials, ""=>nothing)
+    protocals = Dict("AzClientCredentials"=>AzClientCredentials, "AzDeviceCodeCredentials"=>AzDeviceCodeFlowCredentials, "AzAuthCodeFlowCredentials"=>AzAuthCodeFlowCredentials, "AzVMCredentials"=>AzVMCredentials, "AzTokenCredentials"=>AzTokenCredentials, ""=>nothing)
     if !haskey(protocals, protocal)
         error("Authentication protocal, $protocal, is not recognized.")
     end
@@ -820,6 +897,14 @@ session = AzSession(;
     clearcache = false)
 ```
 
+## Token Credentials
+```julia
+session = AzSession(;
+    protocal = AzTokenCredentials,
+    token = "***",
+    refresh_token = "***")
+```
+
 ## New audience
 Create a session from an existing auth code flow session or device code flow session,
 but with a new scope.  This means that we can get a session with a new audience without
@@ -854,6 +939,8 @@ function AzSession(; protocal=nothing, lazy=false, clearcache=false, kwargs...)
         session = AzAuthCodeFlowSession(;kwargs...)
     elseif protocal == AzDeviceCodeFlowCredentials
         session = AzDeviceCodeFlowSession(;kwargs...)
+    elseif protocal == AzTokenCredentials
+        session = AzTokenSession(;kwargs...)
     else
         error("Unknown credentials protocal.")
     end
@@ -873,6 +960,8 @@ function AzSession(d::Dict)
         AzAuthCodeFlowSession(d)
     elseif protocal ∈ ("AzDeviceCodeFlowCredentials", "AzSessions.AzDeviceCodeFlowCredentials")
         AzDeviceCodeFlowSession(d)
+    elseif protocal ∈ ("AzTokenCredentials", "AzSessions.AzTokenCredentials")
+        AzTokenSession(d)
     else
         error("Unknown credentials protocal: $protocal.")
     end
@@ -881,6 +970,6 @@ AzSession(jsonobject::String) = AzSession(JSON.parse(jsonobject))
 
 AzSession(session::AzSessionAbstract) = session
 
-export AzAuthCodeFlowCredentials, AzClientCredentials, AzDeviceCodeFlowCredentials, AzSession, AzSessionAbstract, AzVMCredentials, scrub!, token
+export AzAuthCodeFlowCredentials, AzClientCredentials, AzDeviceCodeFlowCredentials, AzTokenCredentials, AzSession, AzSessionAbstract, AzVMCredentials, scrub!, token
 
 end

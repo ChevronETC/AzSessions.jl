@@ -22,4 +22,8 @@ t = token(session)
 # Authorization code flow authentication
 session = AzSession(;protocal=AzAuthCodeFlowCredentials)
 t = token(session)
+
+# Token credentials
+session = AzSession(;protocal=AzTokenCredentials, token=t.token, refresh_token=t.refresh_token)
+t = token(session)
 ```

@@ -47,6 +47,22 @@ end
 end
 
 # TODO: requires user interaction (can we use Mocking.jl)
+@test_skip @testset "AzSessions, Token Credentials" begin
+    _session = AzSession(;protocal=AzDeviceCodeFlowCredentials)
+    t = token(_session)
+    session = AzSession(;protocal=AzTokenCredentials, token=t, refresh_token=_session.refresh_token)
+    t = token(session)
+    @test isa(t,String)
+    t2 = token(session)
+    @test t2 == t
+
+    session.token = "x"
+    session.expiry = now(Dates.UTC) - Dates.Second(1)
+    t2 = token(session)
+    @test t2 != "x"
+end
+
+# TODO: requires user interaction (can we use Mocking.jl)
 @test_skip @testset "AzSessions, Device code flow credentials" begin
     session = AzSession(;protocal=AzDeviceCodeFlowCredentials)
     @test now(Dates.UTC) <= session.expiry
@@ -233,6 +249,33 @@ end
     @test session.token == _session.token
 end
 
+@test_skip @testset "AzSessions, Token Credentials, serialize" begin
+    _session = AzSession(;protocal=AzDeviceCodeFlowCredentials, lazy=false)
+
+    session = AzSessions.AzSession(;protocal=AzTokenCredentials, token=_session.token, refresh_token=_session.refresh_token)
+
+    jsonsession = json(session)
+    _session = AzSession(jsonsession)
+
+    @test session.protocal == _session.protocal
+    @test session.token == _session.token
+    @test session.refresh_token == _session.refresh_token
+    @test session.client_id == _session.client_id
+    @test session.expiry == _session.expiry
+    @test session.scope == _session.scope
+    @test session.tenant == _session.tenant
+
+    _session = AzSession(JSON.parse(jsonsession))
+
+    @test session.protocal == _session.protocal
+    @test session.token == _session.token
+    @test session.refresh_token == _session.refresh_token
+    @test session.client_id == _session.client_id
+    @test session.expiry == _session.expiry
+    @test session.scope == _session.scope
+    @test session.tenant == _session.tenant
+end
+
 @testset "AzSesions, Client Credentials, copy" begin
     session = AzSessions.AzClientCredentialsSession(
         "AzClientCredentials",
@@ -324,6 +367,27 @@ end
     @test session.token == _session.token
 end
 
+@testset "AzSessions, Token Credentials, copy" begin
+    session = AzSessions.AzTokenSession(
+        "AzTokenCredentials",
+        "mytoken",
+        "myrefreshtoken",
+        "myclientid",
+        now(),
+        "myscope",
+        "mytenant")
+
+    _session = copy(session)
+
+    @test session.protocal == _session.protocal
+    @test session.token == _session.token
+    @test session.refresh_token == _session.refresh_token
+    @test session.client_id == _session.client_id
+    @test session.expiry == _session.expiry
+    @test session.scope == _session.scope
+    @test session.tenant == _session.tenant
+end
+
 @testset "AzSessions, merge scopes" begin
     session = AzSession(;
         scope="openid+offline_access+https://management.azure.com/user_impersonation",
@@ -391,6 +455,22 @@ end
     scrub!(session)
 
     @test session.id_token == ""
+    @test session.refresh_token == ""
+    @test session.token == ""
+end
+
+@testset "AzSessions, Token credentials, scrub" begin
+    session = AzSessions.AzTokenSession(
+        "AzTokenCredentials",
+        "mytoken",
+        "myrefreshtoken",
+        "myclientid",
+        now(),
+        "myscope",
+        "mytenant")
+
+    scrub!(session)
+
     @test session.refresh_token == ""
     @test session.token == ""
 end
