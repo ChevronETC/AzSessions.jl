@@ -107,7 +107,8 @@ abstract type AzSessionAbstract end
     token(session[; offset=Minute(1)])
 
 Return the OAuth2 token associate with `session`.  The `offset` ensures
-that the token is valid for at least `offset` minutes.
+that the token is valid for at least `offset` time.  The default offset
+is one minute.
 """
 function token end
 
