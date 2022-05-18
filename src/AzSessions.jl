@@ -104,9 +104,11 @@ end
 abstract type AzSessionAbstract end
 
 """
-    token(session)
+    token(session[; offset=Minute(1)])
 
-Return the OAuth2 token associate with `session`.
+Return the OAuth2 token associate with `session`.  The `offset` ensures
+that the token is valid for at least `offset` time.  The default offset
+is one minute.
 """
 function token end
 
@@ -168,8 +170,8 @@ function samesession(session1::AzClientCredentialsSession, session2::AzClientCre
         session1.tenant == session2.tenant
 end
 
-function token(session::AzClientCredentialsSession)
-    session.token != "" && now(Dates.UTC) < session.expiry && return session.token
+function token(session::AzClientCredentialsSession; offset=Minute(1))
+    session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
     r = @retry 10 HTTP.request(
         "POST",
@@ -226,8 +228,8 @@ function samesession(session1::AzVMSession, session2::AzVMSession)
     session1.protocal == session2.protocal && session1.resource == session2.resource
 end
 
-function token(session::AzVMSession)
-    session.token != "" && now(Dates.UTC) < session.expiry && return session.token
+function token(session::AzVMSession; offset=Minute(1))
+    session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
     r = @retry 10 HTTP.request(
         "GET",
@@ -364,14 +366,14 @@ function audience_from_scope(scope)
     "https://"*split(replace(scopes[i], "https://"=>""), '/')[1]
 end
 
-function token(session::AzAuthCodeFlowSession, bootstrap=false)
+function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Minute(1))
     while session.lock
         sleep(1)
     end
     session.lock = true
 
     # use the existing token:
-    if session.token != "" && now(Dates.UTC) < session.expiry && audience_from_token(session.token) == audience_from_scope(session.scope)
+    if session.token != "" && now(Dates.UTC) < (session.expiry - offset) && audience_from_token(session.token) == audience_from_scope(session.scope)
         session.lock = false
         return session.token
     end
@@ -382,7 +384,7 @@ function token(session::AzAuthCodeFlowSession, bootstrap=false)
         return session.token
     end
 
-    if bootstrap_token_from_cache!(session, bootstrap)
+    if bootstrap_token_from_cache!(session, bootstrap; offset)
         session.lock = false
         return ""
     end
@@ -550,14 +552,14 @@ function update_session_from_cached_session!(session::AzDeviceCodeFlowSession, c
     session.token = cached_session.token
 end
 
-function token(session::AzDeviceCodeFlowSession, bootstrap=false)
+function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Minute(1))
     while session.lock
         sleep(1)
     end
     session.lock = true
 
     # use the existing token:
-    if session.token != "" && now(Dates.UTC) < session.expiry && audience_from_scope(session.scope) == audience_from_token(session.token)
+    if session.token != "" && now(Dates.UTC) < (session.expiry - offset) && audience_from_scope(session.scope) == audience_from_token(session.token)
         session.lock = false
         return session.token
     end
@@ -568,7 +570,7 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false)
         return session.token
     end
 
-    if bootstrap_token_from_cache!(session, bootstrap)
+    if bootstrap_token_from_cache!(session, bootstrap; offset)
         session.lock = false
         return session.token
     end
