@@ -670,13 +670,13 @@ end
 sessionpath() = joinpath(homedir(), ".azsessions")
 sessionfile() = joinpath(sessionpath(), "sessions.json")
 
-function bootstrap_token_from_cache!(session, bootstrap)
+function bootstrap_token_from_cache!(session, bootstrap; offset)
     cached_session, session_is_recorded = get_recorded_session(session)
     if session_is_recorded
         if bootstrap == false
             update_session_from_cached_session!(session, cached_session)
             session.lock = false
-            token(session, true)
+            token(session, true; offset)
             return true
         else
             @warn "failed to use cached token, token cache may be corrupted."
