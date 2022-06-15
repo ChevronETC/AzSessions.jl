@@ -73,13 +73,7 @@ isretryable(e::Sockets.DNSError) = true
 isretryable(e) = false
 
 function retrywarn(i, s, e)
-    if isa(e, HTTP.StatusError)
-        _e = JSON.parse(String(e.response.body))
-        msg = get(_e, "error", "")
-        @warn "$(e.status): $msg -- sleeping for $s seconds"
-    else
-        @warn "$(typeof(e)) -- sleeping for $s seconds"
-    end
+    @warn "retry $i, sleeping for $s seconds, e=$e"
 end
 
 macro retry(retries, ex::Expr)
