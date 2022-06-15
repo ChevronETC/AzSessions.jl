@@ -1,4 +1,4 @@
-using AzSessions, Dates, HTTP, JSON, JSONWebTokens, Test
+using AzSessions, Dates, HTTP, JSON, JSONWebTokens, Logging, Test
 
 credentials = JSON.parse(ENV["AZURE_CREDENTIALS"])
 AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"])
@@ -420,3 +420,15 @@ AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=cred
     @test t2 != "x"
 end
 AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"], protocal="")
+
+@testset "AzSessions, retrywarn" begin
+    e = HTTP.StatusError(401, "GET", "https://foo", HTTP.Response(401, "body"))
+
+    io = IOBuffer()
+    logger = ConsoleLogger(io, Logging.Info)
+    with_logger(logger) do
+        AzSessions.retrywarn(2, 60, e)
+    end
+    s = String(take!(io))
+    @test contains(s, "401")
+end
