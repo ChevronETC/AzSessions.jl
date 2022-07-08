@@ -68,6 +68,7 @@ function isretryable(e::HTTP.StatusError)
 end
 isretryable(e::Base.IOError) = true
 isretryable(e::HTTP.IOExtras.IOError) = isretryable(e.e)
+isretryable(e::MbedTLS.MbedException) = true
 isretryable(e::Base.EOFError) = true
 isretryable(e::Sockets.DNSError) = true
 isretryable(e) = false
