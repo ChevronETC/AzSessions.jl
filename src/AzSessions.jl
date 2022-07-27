@@ -61,13 +61,15 @@ end
 #
 # retry logic
 #
-function isretryable(e::HTTP.StatusError)
+function isretryable(e::HTTP.Exceptions.StatusError)
     e.status ∈ (404,429) && (return true)
     e.status >= 500 && (return true)
     false
 end
 isretryable(e::Base.IOError) = true
-isretryable(e::HTTP.IOExtras.IOError) = isretryable(e.e)
+isretryable(e::HTTP.Exceptions.ConnectError) = true
+isretryable(e::HTTP.Exceptions.RequestError) = true
+isretryable(e::HTTP.Exceptions.TimeoutError) = true
 isretryable(e::MbedTLS.MbedException) = true
 isretryable(e::Base.EOFError) = true
 isretryable(e::Sockets.DNSError) = true
@@ -171,7 +173,7 @@ function token(session::AzClientCredentialsSession; offset=Minute(1))
     r = @retry 10 HTTP.request(
         "POST",
         "https://login.microsoft.com/$(session.tenant)/oauth2/token",
-        Dict("Content-Type" => "application/x-www-form-urlencoded"),
+        ["Content-Type" => "application/x-www-form-urlencoded"],
         "grant_type=client_credentials&client_id=$(session.client_id)&client_secret=$(HTTP.escapeuri(session.client_secret))&resource=$(HTTP.escapeuri(session.resource))",
         retry = false)
 
@@ -229,7 +231,7 @@ function token(session::AzVMSession; offset=Minute(1))
     r = @retry 10 HTTP.request(
         "GET",
         "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$(session.resource)",
-        Dict("Metadata"=>"true"),
+        ["Metadata"=>"true"],
         retry = false)
 
     rbody = JSON.parse(String(r.body))
@@ -439,7 +441,7 @@ function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Minute(1)
     r = @retry 10 HTTP.request(
         "POST",
         token_uri,
-        Dict("Content-Type"=>"application/x-www-form-urlencoded"),
+        ["Content-Type"=>"application/x-www-form-urlencoded"],
         token_body;
         retry = false)
 
@@ -570,11 +572,10 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Minute(
         return session.token
     end
 
-    devicecode_uri = "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/devicecode"
     _r = HTTP.request(
         "POST",
         "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/devicecode",
-        Dict("Content-Type"=>"application/x-www-form-urlencoded"),
+        ["Content-Type"=>"application/x-www-form-urlencoded"],
         "client_id=$(session.client_id)&scope=$(session.scope)")
     r = JSON.parse(String(_r.body))
 
@@ -589,7 +590,7 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Minute(
         _r = HTTP.request(
             "POST",
             "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/token",
-            Dict("Content-Type"=>"application/x-www-form-urlencoded"),
+            ["Content-Type"=>"application/x-www-form-urlencoded"],
             "grant_type=urn:ietf:params:oauth:grant-type:device_code&client_id=$(session.client_id)&device_code=$device_code";
             status_exception = false,
             retry = false)
@@ -624,7 +625,7 @@ function refresh_token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSes
     r = @retry 10 HTTP.request(
         "POST",
         "https://login.microsoftonline.com/$(session.tenant)/oauth2/token",
-        Dict("Content-Type"=>"application/x-www-form-urlencoded"),
+        ["Content-Type"=>"application/x-www-form-urlencoded"],
         body;
         retry = false)
 
