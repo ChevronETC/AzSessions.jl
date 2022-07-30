@@ -1,6 +1,26 @@
 module AzSessions
 
-using Base64, Dates, HTTP, JSON, JSONWebTokens, MbedTLS, Sockets
+using Base64, Dates, HTTP, JSON, JSONWebTokens, Logging, MbedTLS, Sockets
+
+function logerror(e, loglevel=Logging.Info)
+    io = IOBuffer()
+    showerror(io, e)
+    write(io, "\n\terror type: $(typeof(e))\n")
+
+    local my_current_exceptions
+    if VERSION < v"1.7"
+        my_current_exceptions = Base.catch_backtrace
+    else
+        my_current_exceptions = current_exceptions
+    end
+
+    for (exc, bt) in my_current_exceptions()
+        showerror(io, exc, bt)
+        println(io)
+    end
+    @logmsg loglevel String(take!(io))
+    close(io)
+end
 
 const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"", "protocal"=>"")
 
@@ -77,6 +97,7 @@ isretryable(e) = false
 
 function retrywarn(i, s, e)
     @warn "retry $i, sleeping for $s seconds, e=$e"
+    logerror(e, Logging.Warn)
 end
 
 macro retry(retries, ex::Expr)
