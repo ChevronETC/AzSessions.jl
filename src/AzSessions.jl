@@ -22,13 +22,27 @@ function logerror(e, loglevel=Logging.Info)
     close(io)
 end
 
-const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"", "protocal"=>"")
+const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"", "protocol"=>"")
 
 manifestpath() = joinpath(homedir(), ".azsessions")
 manifestfile() = joinpath(manifestpath(), "manifest.json")
 
+function spelling_mistake(protocol::AbstractString, protocal::AbstractString)
+    if protocol == "" && protocal != ""
+        protocol = protocal
+    end
+    protocol
+end
+
+function spelling_mistake(protocol, protocal)
+    if protocol === nothing && protocal !== nothing
+        protocol = protocal
+    end
+    protocol
+end
+
 """
-    AzSessions.write_manifest(;client_id="", client_secret="", tenant="", protocal="")
+    AzSessions.write_manifest(;client_id="", client_secret="", tenant="", protocol="")
 
 Write an AzSessions manifest file (~/.azsessions/manifest.json).  The
 manifest file contains account specific credentials.
@@ -44,14 +58,14 @@ For example:
 AzSessions.write_manifest(;client_id="myclientid", tenant="mytenant")
 ```
 
-## protocal
-The protocal is one of "AzAuthCodeFlowCredentials", "AzDeviceCodeFlowCredentials", "AzClientCredentials"
-and "AzVMCredentials".  If the default `protocal=""` is chosen for the manifest, then `AzSession()` will
-default to `AzDeviceCodeFlowCredentials`.  The protocal in the manifest can always be over-ridden using
-the `protocal` argument to `AzSession`.
+## protocol
+The protocol is one of "AzAuthCodeFlowCredentials", "AzDeviceCodeFlowCredentials", "AzClientCredentials"
+and "AzVMCredentials".  If the default `protocol=""` is chosen for the manifest, then `AzSession()` will
+default to `AzDeviceCodeFlowCredentials`.  The protocol in the manifest can always be over-ridden using
+the `protocol` argument to `AzSession`.
 """
-function write_manifest(;client_id="", client_secret = "", tenant="", protocal="")
-    manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant, "protocal"=>string(protocal))
+function write_manifest(;client_id="", client_secret = "", tenant="", protocol="", protocal="")
+    manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant, "protocol"=>spelling_mistake(string(protocal), string(protocol)))
     try
         isdir(manifestpath()) || mkdir(manifestpath(); mode=0o700)
         write(manifestfile(), json(manifest, 1))
@@ -160,7 +174,7 @@ function AzClientCredentialsSession(;
 end
 function AzClientCredentialsSession(d::Dict)
     AzClientCredentialsSession(
-        d["protocol"],
+        spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         d["client_id"],
         d["client_secret"],
         DateTime(d["expiry"]),
@@ -228,7 +242,7 @@ function AzVMSession(;resource = "https://management.azure.com/")
 end
 function AzVMSession(d::Dict)
     AzVMSession(
-        d["protocol"],
+        spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         DateTime(d["expiry"]),
         d["resource"],
         d["token"])
@@ -302,7 +316,7 @@ function AzAuthCodeFlowSession(;
 end
 function AzAuthCodeFlowSession(d::Dict)
     AzAuthCodeFlowSession(
-        d["protocol"],
+        spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         d["client_id"],
         DateTime(d["expiry"]),
         d["id_token"],
@@ -511,7 +525,7 @@ function AzDeviceCodeFlowSession(;
 end
 function AzDeviceCodeFlowSession(d::Dict)
     AzDeviceCodeFlowSession(
-        d["protocol"],
+        spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         d["client_id"],
         DateTime(d["expiry"]),
         d["id_token"],
@@ -673,12 +687,12 @@ end
 
 Base.show(io::IO, session::AzDeviceCodeFlowSession) = write(io, "Azure device code flow credentials session")
 
-function AzCredentials(protocal::AbstractString)
-    protocals = Dict("AzClientCredentials"=>AzClientCredentials, "AzDeviceCodeCredentials"=>AzDeviceCodeFlowCredentials, "AzAuthCodeFlowCredentials"=>AzAuthCodeFlowCredentials, "AzVMCredentials"=>AzVMCredentials, ""=>nothing)
-    if !haskey(protocals, protocal)
-        error("Authentication protocal, $protocal, is not recognized.")
+function AzCredentials(protocol::AbstractString)
+    protocols = Dict("AzClientCredentials"=>AzClientCredentials, "AzDeviceCodeCredentials"=>AzDeviceCodeFlowCredentials, "AzAuthCodeFlowCredentials"=>AzAuthCodeFlowCredentials, "AzVMCredentials"=>AzVMCredentials, ""=>nothing)
+    if !haskey(protocols, protocol)
+        error("Authentication protocol, $protocol, is not recognized.")
     end
-    protocals[protocal]
+    protocols[protocol]
 end
 
 #
@@ -799,11 +813,7 @@ protocol.  The available protocols and their `kwargs` are as follows.
 ## Authorization code flow
 ```julia
 session = AzSession(;
-<<<<<<< HEAD
-    protocal = _manifest["protocal"] | AzDeviceCodeFlowCredentials, # default, so can be ommitted.
-=======
-    protocol = AzAuthCodeFlowCredentials, # default, so can be ommitted.
->>>>>>> fix spelling protocal->protocol
+    protocol = _manifest["protocol"] | AzDeviceCodeFlowCredentials,
     client_id = AzSessions._manifest["client_id"],
     redirect_uri = "http://localhost:44300/reply",
     scope = "openid+offline_access+https://storage.azure.com/user_impersonation",
@@ -816,11 +826,7 @@ session = AzSession(;
 ## Device code flow
 ```julia
 session = AzSession(;
-<<<<<<< HEAD
-    protocal = AzDeviceCodeCredentials
-=======
-    protocol = AzDeviceCodeCredentials,  # default, so can be ommitted.
->>>>>>> fix spelling protocal->protocol
+    protocol = AzDeviceCodeCredentials
     client_id = AzSessions._manifest["client_id"],
     scope = "openid+offline_access+https://management.azure.com/user_impersonation",
     scope_auth = "openid+offline_access+https://management.azure.com/user_impersonation+https://storage.azure.com/user_impersonation",
@@ -865,12 +871,13 @@ t = token(session) # token for `https://storage.azure.com` audience without need
 # Notes
 * If `lazy=false`, then authenticate at the time of construction.  Otherwise, wait until the first use of the session before authenticating.
 * If `clearcache=false`, then check the session-cache for an existing token rather than re-authenticating.  The cache is stored in a JSON file (`~/.azsessions/sessions.json`).
-* The default protocal can be set in the manifest (see the `AzSessions.write_manifest` method for more information).
+* The default protocol can be set in the manifest (see the `AzSessions.write_manifest` method for more information).
 """
-function AzSession(; protocal=nothing, lazy=false, clearcache=false, kwargs...)
+function AzSession(; protocol=nothing, protocal=nothing, lazy=false, clearcache=false, kwargs...)
+    protocol = spelling_mistake(protocol, protocal)
     load_manifest()
-    protocal == nothing && (protocal = AzCredentials(get(_manifest, "protocal", "")))
-    protocal == nothing && (protocal = AzDeviceCodeFlowCredentials)
+    protocol === nothing && (protocol = AzCredentials(spelling_mistake(get(_manifest, "protocol", ""), get(_manifest, "protocal", ""))))
+    protocol === nothing && (protocol = AzDeviceCodeFlowCredentials)
 
     local session
     if protocol == AzClientCredentials
@@ -891,7 +898,7 @@ function AzSession(; protocal=nothing, lazy=false, clearcache=false, kwargs...)
 end
 
 function AzSession(d::Dict)
-    protocol = d["protocol"]
+    protocol = spelling_mistake(get(d, "protocol", ""), get(d, "protocal", ""))
     if protocol ∈ ("AzClientCredentials", "AzSessions.AzClientCredentials")
         AzClientCredentialsSession(d)
     elseif protocol ∈ ("AzVMCredentials", protocol == "AzSessions.AzVMCredentials")
