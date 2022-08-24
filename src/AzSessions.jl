@@ -27,6 +27,7 @@ const _manifest = Dict("client_id"=>"", "client_secret"=>"", "tenant"=>"", "prot
 manifestpath() = joinpath(homedir(), ".azsessions")
 manifestfile() = joinpath(manifestpath(), "manifest.json")
 
+# allow for the correct spelling of "protocol" and a common mis-spelling ("protocal")
 function spelling_mistake(protocol::AbstractString, protocal::AbstractString)
     if protocol == "" && protocal != ""
         protocol = protocal
