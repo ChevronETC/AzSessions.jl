@@ -27,7 +27,7 @@ the `client_id` and the `tenant` but will not use the `client_secret`.The later 
 especially useful if you are working in an environment where your adminstrator does not
 share the `client_secret` with the users.
 
-Note that the manifest can also be used to store your preferred protocal.  For example:
+Note that the manifest can also be used to store your preferred protocol.  For example:
 ```julia
-AzSessions.write_manifest(;client_id="myclientid", client_secret="mycientsecret", tenant="mytenant", protocal=AzClientCredentials)
+AzSessions.write_manifest(;client_id="myclientid", client_secret="mycientsecret", tenant="mytenant", protocol=AzClientCredentials)
 ```
