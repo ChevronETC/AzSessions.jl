@@ -717,10 +717,12 @@ function bootstrap_token_from_cache!(session, bootstrap; offset)
     false
 end
 
+unqualify_json_sessions(json_sessions) = replace(json_sessions, "AzSessions."=>"")
+
 function recorded_sessions()
     local rsessions
     if isfile(sessionfile())
-        rsessions = JSON.parse(read(sessionfile(), String))
+        rsessions = JSON.parse(unqualify_json_sessions(read(sessionfile(), String)))
     else
         rsessions = Dict("sessions"=>[])
     end
@@ -729,7 +731,7 @@ end
 
 function write_sessions(rsessions)
     rm(sessionfile(); force=true)
-    write(sessionfile(), json(rsessions))
+    write(sessionfile(), unqualify_json_sessions(json(rsessions)))
     chmod(sessionfile(), 0o400)
 end
 
@@ -899,14 +901,14 @@ function AzSession(; protocol=nothing, protocal=nothing, lazy=false, clearcache=
 end
 
 function AzSession(d::Dict)
-    protocol = spelling_mistake(get(d, "protocol", ""), get(d, "protocal", ""))
-    if protocol ∈ ("AzClientCredentials", "AzSessions.AzClientCredentials")
+    protocol = replace(spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")), "AzSessions."=>"")
+    if protocol == "AzClientCredentials"
         AzClientCredentialsSession(d)
-    elseif protocol ∈ ("AzVMCredentials", protocol == "AzSessions.AzVMCredentials")
+    elseif protocol == "AzVMCredentials"
         AzVMSession(d)
-    elseif protocol ∈ ("AzAuthCodeFlowCredentials", "AzSessions.AzAuthCodeFlowCredentials")
+    elseif protocol == "AzAuthCodeFlowCredentials"
         AzAuthCodeFlowSession(d)
-    elseif protocol ∈ ("AzDeviceCodeFlowCredentials", "AzSessions.AzDeviceCodeFlowCredentials")
+    elseif protocol == "AzDeviceCodeFlowCredentials"
         AzDeviceCodeFlowSession(d)
     else
         error("Unknown credentials protocol: $protocol.")
