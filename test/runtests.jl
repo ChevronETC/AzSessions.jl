@@ -1,7 +1,6 @@
 using AzSessions, Dates, HTTP, JSON, JSONWebTokens, Logging, Test
 
-credentials = JSON.parse(ENV["AZURE_CREDENTIALS"])
-AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"])
+AzSessions.write_manifest(;client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"], tenant=ENV["TENANT"])
 
 function running_on_azure()
     try
@@ -33,7 +32,7 @@ if running_on_azure()
 end
 
 @testset "AzSessions, Client Credentials" begin
-    session = AzSession(;protocol=AzClientCredentials, client_id=credentials["clientId"], client_secret=credentials["clientSecret"])
+    session = AzSession(;protocol=AzClientCredentials, client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"])
     @test now(Dates.UTC) < session.expiry
     t = token(session)
     @test isa(t,String)
@@ -47,7 +46,7 @@ end
 end
 
 @testset "AzSessions, Client Credentials with mis-spelling" begin
-    session = AzSession(;protocal=AzClientCredentials, client_id=credentials["clientId"], client_secret=credentials["clientSecret"])
+    session = AzSession(;protocal=AzClientCredentials, client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"])
     @test now(Dates.UTC) < session.expiry
     t = token(session)
     @test isa(t,String)
@@ -418,7 +417,7 @@ end
     @test manifest["tenant"] == "mytenant"
 end
 
-AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"], protocol="AzClientCredentials")
+AzSessions.write_manifest(;client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"], tenant=ENV["TENANT"], protocol="AzClientCredentials")
 @testset "AzSessions, Client Credentials is the default" begin
     session = AzSession()
     @test session.protocol == "AzClientCredentials"
@@ -433,7 +432,7 @@ AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=cred
     t2 = token(session)
     @test t2 != "x"
 end
-AzSessions.write_manifest(;client_id=credentials["clientId"], client_secret=credentials["clientSecret"], tenant=credentials["tenantId"], protocol="")
+AzSessions.write_manifest(;client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"], tenant=ENV["TENANT"], protocol="")
 
 @testset "AzSessions, retrywarn" begin
     e = HTTP.StatusError(401, "GET", "https://foo", HTTP.Response(401, "body"))
