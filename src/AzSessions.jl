@@ -137,11 +137,13 @@ end
 abstract type AzSessionAbstract end
 
 """
-    token(session[; offset=Minute(1)])
+    token(session[; offset=Second(300+rand(0:600))])
 
 Return the OAuth2 token associate with `session`.  The `offset` ensures
 that the token is valid for at least `offset` time.  The default offset
-is one minute.
+is randomized between 5 and 15 minutes.  We randomize the offset to avoid
+calling the Azure authentication end-point at the same time from many
+VMs operating in parallel.
 """
 function token end
 
@@ -203,7 +205,7 @@ function samesession(session1::AzClientCredentialsSession, session2::AzClientCre
         session1.tenant == session2.tenant
 end
 
-function token(session::AzClientCredentialsSession; offset=Minute(1))
+function token(session::AzClientCredentialsSession; offset=Second(300+rand(0:600)))
     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
     r = @retry 10 HTTP.request(
@@ -261,7 +263,7 @@ function samesession(session1::AzVMSession, session2::AzVMSession)
     session1.protocol == session2.protocol && session1.resource == session2.resource
 end
 
-function token(session::AzVMSession; offset=Minute(1))
+function token(session::AzVMSession; offset=Second(300+rand(0:600)))
     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
     r = @retry 10 HTTP.request(
@@ -399,7 +401,7 @@ function audience_from_scope(scope)
     "https://"*split(replace(scopes[i], "https://"=>""), '/')[1]
 end
 
-function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Minute(1))
+function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(300+rand(0:600)))
     while session.lock
         sleep(1)
     end
@@ -585,7 +587,7 @@ function update_session_from_cached_session!(session::AzDeviceCodeFlowSession, c
     session.token = cached_session.token
 end
 
-function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Minute(1))
+function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(300+rand(0:600)))
     while session.lock
         sleep(1)
     end
