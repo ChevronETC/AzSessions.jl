@@ -197,8 +197,10 @@ function Base.copy(session::AzClientCredentialsSession)
         session.token)
 end
 
+unqualify_protocol_string(protocol) = replace(protocol, "AzSessions."=>"")
+
 function samesession(session1::AzClientCredentialsSession, session2::AzClientCredentialsSession)
-    session1.protocol == session2.protocol &&
+    unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) &&
         session1.client_id == session2.client_id &&
         session1.client_secret == session2.client_secret &&
         session1.resource == session2.resource &&
@@ -260,7 +262,7 @@ function Base.copy(session::AzVMSession)
 end
 
 function samesession(session1::AzVMSession, session2::AzVMSession)
-    session1.protocol == session2.protocol && session1.resource == session2.resource
+    unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) && session1.resource == session2.resource
 end
 
 function token(session::AzVMSession; offset=Second(300+rand(0:600)))
@@ -366,7 +368,7 @@ function Base.copy(session::AzAuthCodeFlowSession)
 end
 
 function samesession(session1::AzAuthCodeFlowSession, session2::AzAuthCodeFlowSession)
-    session1.protocol == session2.protocol &&
+    unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) &&
         session1.client_id == session2.client_id &&
         session1.redirect_uri == session2.redirect_uri &&
         samescope(session1.scope, session2.scope) &&
@@ -572,7 +574,7 @@ function Base.copy(session::AzDeviceCodeFlowSession)
 end
 
 function samesession(session1::AzDeviceCodeFlowSession, session2::AzDeviceCodeFlowSession)
-    session1.protocol == session2.protocol &&
+    unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) &&
         session1.client_id == session2.client_id &&
         samescope(session1.scope, session2.scope) &&
         session1.tenant == session2.tenant
