@@ -845,7 +845,7 @@ session = AzSession(;
 ```julia
 session = AzSession(;
     protocol = AzClientCredentials,
-    tenant=AzSessions._manifest["tenant"],,
+    tenant=AzSessions._manifest["tenant"],
     client_id=AzSessions._manifest["client_id"],
     client_secret=AzSessions._manifest["client_secret"],
     resource="https://management.azure.com/",
