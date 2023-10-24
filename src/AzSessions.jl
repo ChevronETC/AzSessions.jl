@@ -96,36 +96,56 @@ end
 #
 # retry logic
 #
-function isretryable(e::HTTP.Exceptions.StatusError)
-    e.status ∈ (404,429) && (return true)
-    e.status >= 500 && (return true)
-    false
+function isretryable(e::HTTP.Exceptions.StatusError, s)
+    e.status == 404 && (return true,s)
+    e.status >= 500 && (return true,s)
+
+    if e.status == 429
+        for header in e.response.headers
+            if lowercase(header[1]) == "retry-after"
+                s = parse(Int, header[2]) + rand()
+                return true,s
+            end
+        end
+    end
+
+    if e.status == 400
+        b = JSON.parse(String(e.response.body))
+        if first(get(b, "error_codes", [])) == 50196 # server encountered a client request loop
+            @warn "received client request loop error code [50196]."
+            s = rand(120:180) # chosen emperically
+            return true,s
+        end
+    end
+
+    false,s
 end
-isretryable(e::Base.IOError) = true
-isretryable(e::HTTP.Exceptions.ConnectError) = true
-isretryable(e::HTTP.Exceptions.RequestError) = true
-isretryable(e::HTTP.Exceptions.TimeoutError) = true
-isretryable(e::MbedTLS.MbedException) = true
-isretryable(e::Base.EOFError) = true
-isretryable(e::Sockets.DNSError) = true
-isretryable(e) = false
+isretryable(e::Base.IOError, s) = true,s
+isretryable(e::HTTP.Exceptions.ConnectError, s) = true,s
+isretryable(e::HTTP.Exceptions.RequestError, s) = true,s
+isretryable(e::HTTP.Exceptions.TimeoutError, s) = true,s
+isretryable(e::MbedTLS.MbedException, s) = true,s
+isretryable(e::Base.EOFError, s) = true,s
+isretryable(e::Sockets.DNSError, s) = true,s
+isretryable(e, s) = false,s
 
 function retrywarn(i, s, e)
-    @warn "retry $i, sleeping for $s seconds, e=$e"
+    @warn "retry $i, sleeping for $s seconds"
     logerror(e, Logging.Warn)
 end
 
 macro retry(retries, ex::Expr)
     quote
         local r
-        for i = 1:$(esc(retries))
+        for i = 1:($(esc(retries))+1)
             try
                 r = $(esc(ex))
                 break
             catch e
-                (i < $(esc(retries)) && isretryable(e)) || throw(e)
                 maximum_backoff = 60
                 s = min(2.0^(i-1), maximum_backoff) + rand()
+                _isretryable,s = isretryable(e, s)
+                (i < $(esc(retries)) && _isretryable) || throw(e)
                 retrywarn(i, s, e)
                 sleep(s)
             end
