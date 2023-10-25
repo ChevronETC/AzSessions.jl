@@ -123,7 +123,7 @@ macro retry(retries, ex::Expr)
                 r = $(esc(ex))
                 break
             catch e
-                (i <= $(esc(retries)) && isretryable(e)) || rethrow(e)
+                (i < $(esc(retries)) && isretryable(e)) || throw(e)
                 maximum_backoff = 60
                 s = min(2.0^(i-1), maximum_backoff) + rand()
                 retrywarn(i, s, e)
@@ -403,7 +403,7 @@ function audience_from_scope(scope)
     "https://"*split(replace(scopes[i], "https://"=>""), '/')[1]
 end
 
-function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
+function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
     while session.lock
         sleep(1)
     end
@@ -492,7 +492,6 @@ function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(ra
     session.expiry = now(Dates.UTC) + Dates.Second(rbody["expires_in"])
 
     session_has_tokens(session) && record_session(session)
-    session.lock = false
     session.token
 end
 
@@ -589,7 +588,7 @@ function update_session_from_cached_session!(session::AzDeviceCodeFlowSession, c
     session.token = cached_session.token
 end
 
-function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
+function _token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
     while session.lock
         sleep(1)
     end
@@ -612,7 +611,7 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(
         return session.token
     end
 
-    _r = HTTP.request(
+    _r = @retry 1 HTTP.request(
         "POST",
         "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/devicecode",
         ["Content-Type"=>"application/x-www-form-urlencoded"],
@@ -627,7 +626,7 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(
 
     local _r
     while true
-        _r = HTTP.request(
+        _r = @retry 1 HTTP.request(
             "POST",
             "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/token",
             ["Content-Type"=>"application/x-www-form-urlencoded"],
@@ -654,7 +653,6 @@ function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(
     session.expiry = now(Dates.UTC) + Dates.Second(r["expires_in"])
 
     session_has_tokens(session) && record_session(session)
-    session.lock = false
     session.token
 end
 
@@ -806,6 +804,14 @@ function delete_session(session)
         deleteat!(rsessions["sessions"], i)
     end
     write_sessions(rsessions)
+end
+
+function token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSession}, bootstrap=false; offset=Second(300+rand(0:600)))
+    try
+        _token(session, bootstrap; offset)
+    finally
+        session.lock = false
+    end
 end
 
 #
