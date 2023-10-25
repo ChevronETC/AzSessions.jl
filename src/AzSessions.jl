@@ -137,7 +137,7 @@ end
 abstract type AzSessionAbstract end
 
 """
-    token(session[; offset=Second(300+rand(0:600))])
+    token(session[; offset=Second(rand(300:600))])
 
 Return the OAuth2 token associate with `session`.  The `offset` ensures
 that the token is valid for at least `offset` time.  The default offset
@@ -207,7 +207,7 @@ function samesession(session1::AzClientCredentialsSession, session2::AzClientCre
         session1.tenant == session2.tenant
 end
 
-function token(session::AzClientCredentialsSession; offset=Second(300+rand(0:600)))
+function token(session::AzClientCredentialsSession; offset=Second(rand(300:600)))
     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
     r = @retry 10 HTTP.request(
@@ -265,7 +265,7 @@ function samesession(session1::AzVMSession, session2::AzVMSession)
     unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) && session1.resource == session2.resource
 end
 
-function token(session::AzVMSession; offset=Second(300+rand(0:600)))
+function token(session::AzVMSession; offset=Second(rand(300:600)))
     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
     r = @retry 10 HTTP.request(
@@ -403,7 +403,7 @@ function audience_from_scope(scope)
     "https://"*split(replace(scopes[i], "https://"=>""), '/')[1]
 end
 
-function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(300+rand(0:600)))
+function token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
     while session.lock
         sleep(1)
     end
@@ -589,7 +589,7 @@ function update_session_from_cached_session!(session::AzDeviceCodeFlowSession, c
     session.token = cached_session.token
 end
 
-function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(300+rand(0:600)))
+function token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
     while session.lock
         sleep(1)
     end
