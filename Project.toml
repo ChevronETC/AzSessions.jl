@@ -13,8 +13,12 @@ MbedTLS = "739be429-bea8-5141-9913-cc70e7f3736d"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [compat]
+Base64 = "1"
+Dates = "1"
 HTTP = "1"
 JSON = "0.21"
 JSONWebTokens = "0.2, 0.3, 1"
+Logging = "1"
 MbedTLS = "0.6.8, 0.7, 1"
+Sockets = "1"
 julia = "1"
