@@ -826,7 +826,7 @@ function delete_session(session)
     write_sessions(rsessions)
 end
 
-function token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSession}, bootstrap=false; offset=Second(300+rand(0:600)))
+function token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSession}, bootstrap=false; offset=Second(rand(300:600)))
     try
         _token(session, bootstrap; offset)
     finally
