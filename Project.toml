@@ -1,6 +1,6 @@
 name = "AzSessions"
 uuid = "f239b30d-ae6b-58be-a2d5-7e9f30e280a9"
-version = "2.1.5"
+version = "2.1.6"
 
 [deps]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
