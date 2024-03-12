@@ -458,16 +458,18 @@ function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(r
     catch
         error("AzSessions: there is already a server listening on port $port")
     end
-    tsk = @async HTTP.serve(Sockets.localhost, port; server=server) do request::HTTP.Request
-        queries = split(parse(HTTP.URI, request.target).query, '&')
-        for query in queries
-            q = split(query, '=')
-            if q[1] == "code"
-                auth_code = q[2]
-                break
+    with_logger(NullLogger()) do
+        tsk = @async HTTP.serve(Sockets.localhost, port; server=server) do request::HTTP.Request
+            queries = split(parse(HTTP.URI, request.target).query, '&')
+            for query in queries
+                q = split(query, '=')
+                if q[1] == "code"
+                    auth_code = q[2]
+                    break
+                end
             end
+            HTTP.Response(200, "Logged in via AzSessions.jl")
         end
-        HTTP.Response(200, "Logged in via AzSessions.jl")
     end
 
     authcode_uri = "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/authorize?client_id=$(session.client_id)&response_type=code&redirect_uri=$(session.redirect_uri)&response_mode=query&scope=$(session.scope_auth)&state=$state&prompt=select_account"
