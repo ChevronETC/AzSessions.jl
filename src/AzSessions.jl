@@ -184,6 +184,7 @@ mutable struct AzClientCredentialsSession <: AzSessionAbstract
     client_secret::String
     expiry::DateTime
     resource::String
+    scope::String
     tenant::String
     token::String
 end
@@ -191,9 +192,10 @@ function AzClientCredentialsSession(;
         client_id = _manifest["client_id"],
         client_secret = _manifest["client_secret"],
         resource = "https://management.azure.com/",
+        scope = "",
         tenant = _manifest["tenant"])
     client_secret == "" && error("AzClientCredentials requires client_secret, but got client_secret=\"\"")
-    AzClientCredentialsSession(string(AzClientCredentials), client_id, client_secret, now(Dates.UTC), resource, tenant, "")
+    AzClientCredentialsSession(string(AzClientCredentials), client_id, client_secret, now(Dates.UTC), resource, scope, tenant, "")
 end
 function AzClientCredentialsSession(d::Dict)
     AzClientCredentialsSession(
@@ -202,6 +204,7 @@ function AzClientCredentialsSession(d::Dict)
         d["client_secret"],
         DateTime(d["expiry"]),
         d["resource"],
+        d["scope"],
         d["tenant"],
         d["token"])
 end
@@ -213,6 +216,7 @@ function Base.copy(session::AzClientCredentialsSession)
         session.client_secret,
         session.expiry,
         session.resource,
+        session.scope,
         session.tenant,
         session.token)
 end
@@ -224,17 +228,23 @@ function samesession(session1::AzClientCredentialsSession, session2::AzClientCre
         session1.client_id == session2.client_id &&
         session1.client_secret == session2.client_secret &&
         session1.resource == session2.resource &&
+        session1.scope == session2.scope &&
         session1.tenant == session2.tenant
 end
 
 function token(session::AzClientCredentialsSession; offset=Second(rand(300:600)))
     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
+    b = "grant_type=client_credentials&client_id=$(session.client_id)&client_secret=$(HTTP.escapeuri(session.client_secret))&resource=$(HTTP.escapeuri(session.resource))"
+    if !isempty(session.scope)
+        b *= "&scope=$(HTTP.escapeuri(session.scope))"
+    end
+
     r = @retry 10 HTTP.request(
         "POST",
         "https://login.microsoft.com/$(session.tenant)/oauth2/token",
         ["Content-Type" => "application/x-www-form-urlencoded"],
-        "grant_type=client_credentials&client_id=$(session.client_id)&client_secret=$(HTTP.escapeuri(session.client_secret))&resource=$(HTTP.escapeuri(session.resource))",
+        b,
         retry = false)
 
     rbody = JSON.parse(String(r.body))
@@ -877,6 +887,7 @@ session = AzSession(;
     client_id=AzSessions._manifest["client_id"],
     client_secret=AzSessions._manifest["client_secret"],
     resource="https://management.azure.com/",
+    scope="",
     clearcache = false)
 ```
 
@@ -907,6 +918,7 @@ t = token(session) # token for `https://storage.azure.com` audience without need
 * If `lazy=false`, then authenticate at the time of construction.  Otherwise, wait until the first use of the session before authenticating.
 * If `clearcache=false`, then check the session-cache for an existing token rather than re-authenticating.  The cache is stored in a JSON file (`~/.azsessions/sessions.json`).
 * The default protocol can be set in the manifest (see the `AzSessions.write_manifest` method for more information).
+* For `AzClientCredentials` if `scope` is an empty string (this is the default), then it is ommited from the request to the authorization endpoint.
 """
 function AzSession(; protocol=nothing, protocal=nothing, lazy=false, clearcache=false, kwargs...)
     protocol = spelling_mistake(protocol, protocal)
