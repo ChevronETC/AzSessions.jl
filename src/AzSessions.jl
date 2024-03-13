@@ -1,6 +1,6 @@
 module AzSessions
 
-using Base64, Dates, HTTP, JSON, JSONWebTokens, Logging, MbedTLS, Sockets
+using Base64, Dates, HTTP, JSON, JSONWebTokens, Logging, MbedTLS, Random, Sockets
 
 function logerror(e, loglevel=Logging.Info)
     io = IOBuffer()
@@ -448,8 +448,9 @@ function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(r
 
     # otherwise, user is required to authenticate:
     port = parse(Int, parse(HTTP.URI, session.redirect_uri).port)
-    state = rand(Int)
+    state = randstring('1':'9',6)
     auth_code = ""
+    errormsg = ""
 
     @debug "starting server..."
     local server
@@ -458,8 +459,8 @@ function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(r
     catch
         error("AzSessions: there is already a server listening on port $port")
     end
-    with_logger(NullLogger()) do
-        tsk = @async HTTP.serve(Sockets.localhost, port; server=server) do request::HTTP.Request
+    tsk = @async with_logger(NullLogger()) do
+        HTTP.serve(Sockets.localhost, port; server=server) do request::HTTP.Request
             queries = split(parse(HTTP.URI, request.target).query, '&')
             for query in queries
                 q = split(query, '=')
@@ -467,8 +468,21 @@ function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(r
                     auth_code = q[2]
                     break
                 end
+                if q[1] == "error"
+                    errormsg = q[2]
+                    break
+                end
             end
-            HTTP.Response(200, "Logged in via AzSessions.jl")
+            local response
+            if !isempty(errormsg)
+                response = HTTP.Response(200, "Error: $errormsg")
+            elseif !isempty(auth_code)
+                response = HTTP.Response(200, "Logged in via AzSessions.jl")
+            else
+                errormsg = "unknown"
+                response = HTTP.Response(200, "Error: $errormsg")
+            end
+            response
         end
     end
 
@@ -491,10 +505,12 @@ function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(r
         @info "Failed to open browser. To authenticate, please open the following url on the local machine:\n\t$authcode_uri"
     end
 
-    while auth_code == ""
+    while auth_code == "" && errormsg == ""
         sleep(1)
     end
     close(server)
+
+    errormsg == "" || error(errormsg)
 
     token_uri = "https://login.microsoftonline.com/$(session.tenant)/oauth2/v2.0/token"
     token_body = "client_id=$(session.client_id)&scope=$(session.scope)&code=$auth_code&redirect_uri=$(session.redirect_uri)&grant_type=authorization_code"
