@@ -230,12 +230,11 @@ end
 function token(session::AzClientCredentialsSession; offset=Second(rand(300:600)))
     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
 
-    scope = "$(rstrip(session.resource, '/'))/.default"
     r = @retry 10 HTTP.request(
         "POST",
         "https://login.microsoft.com/$(session.tenant)/oauth2/token",
         ["Content-Type" => "application/x-www-form-urlencoded"],
-        "grant_type=client_credentials&client_id=$(session.client_id)&client_secret=$(HTTP.escapeuri(session.client_secret))&scope=$(HTTP.escapeuri(scope))",
+        "grant_type=client_credentials&client_id=$(session.client_id)&client_secret=$(HTTP.escapeuri(session.client_secret))&resource=$(HTTP.escapeuri(session.resource))",
         retry = false)
 
     rbody = JSON.parse(String(r.body))
