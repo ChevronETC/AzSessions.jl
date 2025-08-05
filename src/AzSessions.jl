@@ -836,6 +836,41 @@ function token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSession}, b
     end
 end
 
+"""
+    jwt_new = token_exchange(jwt[;
+        client_id = AzSessions._manifest["client_id"],
+        client_secret = AzSessions._manifest["client_secret"],
+        scope = "https://management.azure.com/user_impersonation",
+        tenant = AzSessions._manifest["tenant"])
+
+Create a new JWT token `jwt_new` from an existing JWT token `jwt`.  This allows
+applications to change the audience and act on behalf of the user using that new
+audience.
+"""
+function token_exchange(jwt;
+        client_id = _manifest["client_id"],
+        client_secret = _manifest["client_secret"],
+        scope="https://management.azure.com/user_impersonation",
+        tenant = _manifest["tenant"])
+    b = Dict(
+        "grant_type" => "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        "client_id" => client_id,
+        "client_secret" => client_secret, 
+        "assertion" => jwt,
+        "requested_token_use" => "on_behalf_of",
+        "scope" => scope
+    )
+
+    r = @retry 10 HTTP.request(
+        "POST",
+        "https://login.microsoftonline.com/$tenant/oauth2/v2.0/token",
+        ["Content-Type" => "application/x-www-form-urlencoded"],
+        HTTP.URIs.escapeuri(b)
+    )
+
+    r["access_token"]
+end
+
 #
 # API
 #
@@ -950,6 +985,6 @@ AzSession(jsonobject::String) = AzSession(JSON.parse(jsonobject))
 
 AzSession(session::AzSessionAbstract) = session
 
-export AzAuthCodeFlowCredentials, AzClientCredentials, AzDeviceCodeFlowCredentials, AzSession, AzSessionAbstract, AzVMCredentials, scrub!, token
+export AzAuthCodeFlowCredentials, AzClientCredentials, AzDeviceCodeFlowCredentials, AzSession, AzSessionAbstract, AzVMCredentials, scrub!, token, token_exchange
 
 end
