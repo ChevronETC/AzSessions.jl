@@ -1,6 +1,9 @@
 module AzSessions
 
-using Base64, Dates, HTTP, JSON, JSONWebTokens, Logging, MbedTLS, Sockets
+using Base64, Dates, HTTP, JSON, JWTs, Logging, MbedTLS, Sockets
+
+# handle transition from JSON <1 to JSON >=1
+JSONObject = isdefined(JSON, :Object) ? JSON.Object : Dict
 
 function logerror(e, loglevel=Logging.Info)
     io = IOBuffer()
@@ -69,7 +72,7 @@ function write_manifest(;client_id="", client_secret = "", tenant="", protocol="
     manifest = Dict("client_id"=>client_id, "client_secret"=>client_secret, "tenant"=>tenant, "protocol"=>spelling_mistake(string(protocal), string(protocol)))
     try
         isdir(manifestpath()) || mkdir(manifestpath(); mode=0o700)
-        write(manifestfile(), json(manifest, 1))
+        write(manifestfile(), JSON.json(manifest, 1))
         chmod(manifestfile(), 0o600)
     catch e
         @error "Failed to write manifest file, $(AzSessions.manifestfile())"
@@ -195,7 +198,7 @@ function AzClientCredentialsSession(;
     client_secret == "" && error("AzClientCredentials requires client_secret, but got client_secret=\"\"")
     AzClientCredentialsSession(string(AzClientCredentials), client_id, client_secret, now(Dates.UTC), resource, tenant, "")
 end
-function AzClientCredentialsSession(d::Dict)
+function AzClientCredentialsSession(d::Union{Dict,JSONObject})
     AzClientCredentialsSession(
         spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         d["client_id"],
@@ -265,7 +268,7 @@ end
 function AzVMSession(;resource = "https://management.azure.com/")
     AzVMSession(string(AzVMCredentials), now(Dates.UTC), resource, "")
 end
-function AzVMSession(d::Dict)
+function AzVMSession(d::Union{Dict,JSONObject})
     AzVMSession(
         spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         DateTime(d["expiry"]),
@@ -339,7 +342,7 @@ function AzAuthCodeFlowSession(;
         tenant = _manifest["tenant"])
     AzAuthCodeFlowSession(string(AzAuthCodeFlowCredentials), client_id, now(Dates.UTC), "", false, redirect_uri, "", scope, mergescopes(scope, scope_auth), tenant, "")
 end
-function AzAuthCodeFlowSession(d::Dict)
+function AzAuthCodeFlowSession(d::Union{Dict,JSONObject})
     AzAuthCodeFlowSession(
         spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         d["client_id"],
@@ -408,7 +411,7 @@ end
 function audience_from_token(token)
     local audience
     try
-        decodedJWT = JSONWebTokens.decode(JSONWebTokens.None(), token)
+        decodedJWT = claims(JWT(;jwt=token))
         audience = get(decodedJWT, "aud", "")
     catch
         @warn "Unable to retrieve audience from token."
@@ -549,7 +552,7 @@ function AzDeviceCodeFlowSession(;
         tenant = _manifest["tenant"])
     AzDeviceCodeFlowSession(string(AzDeviceCodeFlowCredentials), client_id, now(Dates.UTC), "", false, "", scope, mergescopes(scope, scope_auth), tenant, "")
 end
-function AzDeviceCodeFlowSession(d::Dict)
+function AzDeviceCodeFlowSession(d::Union{Dict,JSONObject})
     AzDeviceCodeFlowSession(
         spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
         d["client_id"],
@@ -755,7 +758,7 @@ end
 
 function write_sessions(rsessions)
     rm(sessionfile(); force=true)
-    write(sessionfile(), unqualify_json_sessions(json(rsessions)))
+    write(sessionfile(), unqualify_json_sessions(JSON.json(rsessions)))
     chmod(sessionfile(), 0o400)
 end
 
@@ -771,14 +774,15 @@ function record_session(session)
 
     rsessions = recorded_sessions()
     has_session = false
-    for (i,rsession) in enumerate(rsessions)
-        if samesession(session, rsession)
-            rsessions[i] = json(session)
+    for (i,json_recorded_session) in enumerate(rsessions["sessions"])
+        recorded_session = AzSession(json_recorded_session)
+        if samesession(session, recorded_session)
+            rsessions[i] = JSON.json(session)
             has_session = true
         end
     end
     if !has_session
-        pushfirst!(rsessions["sessions"], json(session))
+        pushfirst!(rsessions["sessions"], JSON.json(session))
     end
     write_sessions(rsessions)
 end
@@ -967,7 +971,7 @@ function AzSession(; protocol=nothing, protocal=nothing, lazy=false, clearcache=
     session
 end
 
-function AzSession(d::Dict)
+function AzSession(d::Union{Dict,JSONObject})
     protocol = replace(spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")), "AzSessions."=>"")
     if protocol == "AzClientCredentials"
         AzClientCredentialsSession(d)
