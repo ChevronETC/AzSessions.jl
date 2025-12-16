@@ -1,4 +1,4 @@
-using AzSessions, Dates, HTTP, JSON, JSONWebTokens, Logging, Test
+using AzSessions, Dates, HTTP, JSON, JWTs, Logging, Test
 
 AzSessions.write_manifest(;client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"], tenant=ENV["TENANT"])
 
@@ -75,7 +75,7 @@ end
 
     session2 = AzSession(session;scope="https://storage.azure.com/user_impersonation")
     t = token(session2)
-    decodedJWT = JSONWebTokens.decode(JSONWebTokens.None(), t)
+    decodedJWT = claims(JWT(;jwt=t))
     @test decodedJWT["aud"] == "https://storage.azure.com"
 end
 
@@ -95,7 +95,7 @@ end
 
     session2 = AzSession(session;scope="https://storage.azure.com/user_impersonation")
     t = token(session2)
-    decodedJWT = JSONWebTokens.decode(JSONWebTokens.None(), t)
+    decodedJWT = claims(JWT(;jwt=t))
     @test decodedJWT["aud"] == "https://storage.azure.com"
 end
 
@@ -124,7 +124,7 @@ end
         "mytenant",
         "mytoken")
 
-    jsonsession = json(session)
+    jsonsession = JSON.json(session)
     _session = AzSession(jsonsession)
 
     @test session.protocol == _session.protocol
@@ -152,7 +152,7 @@ end
         "myresource",
         "mytoken")
 
-    jsonsession = json(session)
+    jsonsession = JSON.json(session)
     _session = AzSession(jsonsession)
 
     @test session.protocol == _session.protocol
@@ -175,7 +175,7 @@ end
         "tenant",
         "token")
 
-    jsonsession = json(session)
+    jsonsession = JSON.json(session)
     _session = AzSession(jsonsession)
 
     @test session.protocol == _session.protocol
@@ -218,7 +218,7 @@ end
         "mytenant",
         "mytoken")
 
-    jsonsession = json(session)
+    jsonsession = JSON.json(session)
     _session = AzSession(jsonsession)
 
     @test session.protocol == _session.protocol
