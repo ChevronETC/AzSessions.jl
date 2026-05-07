@@ -4,23 +4,23 @@ AzSessions.write_manifest(;client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT
 
 function running_on_azure()
     try
-        HTTP.request(
-            "GET",
-            "http://169.254.169.254/metadata/instance?api-version=2017-08-01",
-            Dict("Metadata"=>"true"))
-        return true
+        r = HTTP.get("http://169.254.169.254/metadata/instance?api-version=2017-08-01",
+            Dict("Metadata"=>"true"); status_exception=false, connect_timeout=2, readtimeout=2)
+        200 <= r.status < 300
     catch
-        return false
+        false
     end
 end
 
 if running_on_azure()
     # TODO - not sure why this doesn't work on CI
-    @test_skip @testset "AzSessions, VM" begin
+    #@test_skip @testset "AzSessions, VM, system-assigned identity" begin
+    @testset "AzSessions, VM, system-assigned identity" begin
         session = AzSession(;protocol=AzVMCredentials)
+        @test session.client_id == ""
         @test now(Dates.UTC) <= session.expiry
         t = token(session)
-        @test isa(t,String)
+        @test isa(t, String)
         t2 = token(session)
         @test t2 == t
 
@@ -29,6 +29,80 @@ if running_on_azure()
         t2 = token(session)
         @test t2 != "x"
     end
+
+    # TODO - requires a user-assigned managed identity to be attached to the VM
+    @test_skip @testset "AzSessions, VM, user-assigned identity" begin
+        ua_client_id = ENV["USER_ASSIGNED_CLIENT_ID"]
+        session = AzSession(;protocol=AzVMCredentials, client_id=ua_client_id)
+        @test session.client_id == ua_client_id
+        @test now(Dates.UTC) <= session.expiry
+        t = token(session)
+        @test isa(t, String)
+        t2 = token(session)
+        @test t2 == t
+
+        session.token = "x"
+        session.expiry = now(Dates.UTC) - Dates.Second(1)
+        t2 = token(session)
+        @test t2 != "x"
+    end
+end
+
+@testset "AzVMSession constructors and helpers" begin
+    # keyword constructor defaults (system-assigned identity)
+    session = AzSessions.AzVMSession()
+    @test session.client_id == ""
+    @test session.resource == "https://management.azure.com/"
+    @test session.token == ""
+
+    # keyword constructor with user-assigned identity
+    session = AzSessions.AzVMSession(;client_id="test-client-id", resource="https://storage.azure.com/")
+    @test session.client_id == "test-client-id"
+    @test session.resource == "https://storage.azure.com/"
+
+    # copy
+    session_copy = copy(session)
+    @test session_copy.client_id == session.client_id
+    @test session_copy.resource == session.resource
+    @test session_copy.protocol == session.protocol
+
+    # samesession — matching
+    session_a = AzSessions.AzVMSession(;client_id="abc", resource="https://management.azure.com/")
+    session_b = AzSessions.AzVMSession(;client_id="abc", resource="https://management.azure.com/")
+    @test AzSessions.samesession(session_a, session_b)
+
+    # samesession — different client_id
+    session_c = AzSessions.AzVMSession(;client_id="xyz", resource="https://management.azure.com/")
+    @test !AzSessions.samesession(session_a, session_c)
+
+    # samesession — different resource
+    session_d = AzSessions.AzVMSession(;client_id="abc", resource="https://storage.azure.com/")
+    @test !AzSessions.samesession(session_a, session_d)
+
+    # dict round-trip
+    d = Dict(
+        "protocol" => "AzVMCredentials",
+        "client_id" => "test-id",
+        "expiry" => string(now(Dates.UTC)),
+        "resource" => "https://management.azure.com/",
+        "token" => "")
+    session_from_dict = AzSessions.AzVMSession(d)
+    @test session_from_dict.client_id == "test-id"
+
+    # dict round-trip without client_id (backward compatibility)
+    d_no_client = Dict(
+        "protocol" => "AzVMCredentials",
+        "expiry" => string(now(Dates.UTC)),
+        "resource" => "https://management.azure.com/",
+        "token" => "")
+    session_from_dict2 = AzSessions.AzVMSession(d_no_client)
+    @test session_from_dict2.client_id == ""
+
+    # scrub!
+    session_scrub = AzSessions.AzVMSession(;client_id="id")
+    session_scrub.token = "secret-token"
+    scrub!(session_scrub)
+    @test session_scrub.token == ""
 end
 
 @testset "AzSessions, Client Credentials" begin
@@ -148,6 +222,7 @@ end
 @testset "AzSessions, VM Credentials, serialize" begin
     session = AzSessions.AzVMSession(
         "AzVMCredentials",
+        "myclientid",
         now(),
         "myresource",
         "mytoken")
@@ -156,6 +231,7 @@ end
     _session = AzSession(jsonsession)
 
     @test session.protocol == _session.protocol
+    @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.resource == _session.resource
     @test session.token == _session.token
@@ -269,6 +345,7 @@ end
 @testset "AzSessions, VM Credentials, copy" begin
     session = AzSessions.AzVMSession(
         "AzVMCredentials",
+        "myclientid",
         now(),
         "myresource",
         "mytoken")
@@ -276,6 +353,7 @@ end
     _session = copy(session)
 
     @test session.protocol == _session.protocol
+    @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.resource == _session.resource
     @test session.token == _session.token

@@ -261,50 +261,104 @@ Base.show(io::IO, session::AzClientCredentialsSession) = write(io, "Azure client
 struct AzVMCredentials end
 mutable struct AzVMSession <: AzSessionAbstract
     protocol::String
+    client_id::String
     expiry::DateTime
     resource::String
     token::String
 end
-function AzVMSession(;resource = "https://management.azure.com/")
-    AzVMSession(string(AzVMCredentials), now(Dates.UTC), resource, "")
+# function AzVMSession(;resource = "https://management.azure.com/")
+#     AzVMSession(string(AzVMCredentials), now(Dates.UTC), resource, "")
+# end
+# Construct a new AzVMSession. If client_id is empty, uses the system-assigned managed identity.
+# If client_id is provided, targets a specific user-assigned managed identity.
+function AzVMSession(;client_id::String="", resource::String="https://management.azure.com/")::AzVMSession
+    AzVMSession(string(AzVMCredentials), client_id, now(Dates.UTC), resource, "")
 end
-function AzVMSession(d::Union{Dict,JSONObject})
+# function AzVMSession(d::Union{Dict,JSONObject})
+#     AzVMSession(
+#         spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
+#         DateTime(d["expiry"]),
+#         d["resource"],
+#         d["token"])
+# end
+# Reconstruct an AzVMSession from a serialized Dict/JSONObject (e.g. from session cache).
+function AzVMSession(d::Union{Dict,JSONObject})::AzVMSession
     AzVMSession(
         spelling_mistake(get(d, "protocol", ""), get(d, "protocal", "")),
+        get(d, "client_id", ""),
         DateTime(d["expiry"]),
         d["resource"],
         d["token"])
 end
 
-function Base.copy(session::AzVMSession)
+# function Base.copy(session::AzVMSession)
+#     AzVMSession(
+#         session.protocol,
+#         session.expiry,
+#         session.resource,
+#         session.token)
+# end
+# Create a shallow copy of the session.
+function Base.copy(session::AzVMSession)::AzVMSession
     AzVMSession(
         session.protocol,
+        session.client_id,
         session.expiry,
         session.resource,
         session.token)
 end
 
-function samesession(session1::AzVMSession, session2::AzVMSession)
-    unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) && session1.resource == session2.resource
+# function samesession(session1::AzVMSession, session2::AzVMSession)
+#     unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) && session1.resource == session2.resource
+# end
+# Check whether two VM sessions target the same identity and resource.
+function samesession(session1::AzVMSession, session2::AzVMSession)::Bool
+    unqualify_protocol_string(session1.protocol) == unqualify_protocol_string(session2.protocol) &&
+        session1.client_id == session2.client_id &&
+        session1.resource == session2.resource
 end
 
-function token(session::AzVMSession; offset=Second(rand(300:600)))
+# function token(session::AzVMSession; offset=Second(rand(300:600)))
+#     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
+#
+#     r = @retry 10 HTTP.request(
+#         "GET",
+#         "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$(session.resource)",
+#         ["Metadata"=>"true"],
+#         retry = false)
+#
+#     rbody = JSON.parse(String(r.body))
+#     session.token = rbody["access_token"]
+#     session.expiry = now(Dates.UTC) + Dates.Second(rbody["expires_in"])
+#
+#     session.token
+# end
+# Fetch an OAuth2 token from the Azure Instance Metadata Service (IMDS).
+# Returns a cached token if it is still valid beyond the offset window.
+# For user-assigned identities, appends client_id to the IMDS request.
+function token(session::AzVMSession; offset::Period=Second(rand(300:600)))::String
     session.token != "" && now(Dates.UTC) < (session.expiry - offset) && return session.token
+
+    url = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2019-08-01&resource=$(session.resource)"
+    if session.client_id != ""
+        url *= "&client_id=$(session.client_id)"
+    end
 
     r = @retry 10 HTTP.request(
         "GET",
-        "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$(session.resource)",
+        url,
         ["Metadata"=>"true"],
         retry = false)
 
     rbody = JSON.parse(String(r.body))
     session.token = rbody["access_token"]
-    session.expiry = now(Dates.UTC) + Dates.Second(rbody["expires_in"])
+    session.expiry = now(Dates.UTC) + Dates.Second(parse(Int, string(rbody["expires_in"])))
 
     session.token
 end
 
-function scrub!(session::AzVMSession)
+# Remove the cached token from the session.
+function scrub!(session::AzVMSession)::AzVMSession
     session.token = ""
     session
 end
