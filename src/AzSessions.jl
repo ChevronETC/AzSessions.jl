@@ -702,6 +702,8 @@ function refresh_token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSes
         session.token = rbody["access_token"]
         session.refresh_token = rbody["refresh_token"]
         session.expiry = now(Dates.UTC) + Dates.Second(rbody["expires_in"])
+
+        session_has_tokens(session) && record_session(session)
     end
     status
 end
@@ -777,7 +779,7 @@ function record_session(session)
     for (i,json_recorded_session) in enumerate(rsessions["sessions"])
         recorded_session = AzSession(json_recorded_session)
         if samesession(session, recorded_session)
-            rsessions[i] = JSON.json(session)
+            rsessions["sessions"][i] = JSON.json(session)
             has_session = true
         end
     end
