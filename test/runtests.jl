@@ -75,7 +75,7 @@ end
 
     session2 = AzSession(session;scope="https://storage.azure.com/user_impersonation")
     t = token(session2)
-    decodedJWT = claims(JWT(;jwt=t))
+    decodedJWT = JWTs.claims(JWTs.JWT(;jwt=t))
     @test decodedJWT["aud"] == "https://storage.azure.com"
 end
 
@@ -95,7 +95,7 @@ end
 
     session2 = AzSession(session;scope="https://storage.azure.com/user_impersonation")
     t = token(session2)
-    decodedJWT = claims(JWT(;jwt=t))
+    decodedJWT = JWTs.claims(JWTs.JWT(;jwt=t))
     @test decodedJWT["aud"] == "https://storage.azure.com"
 end
 

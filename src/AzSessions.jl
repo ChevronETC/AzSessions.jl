@@ -410,7 +410,7 @@ end
 function audience_from_token(token)
     local audience
     try
-        decodedJWT = claims(JWT(;jwt=token))
+        decodedJWT = JWTs.claims(JWTs.JWT(;jwt=token))
         audience = get(decodedJWT, "aud", "")
     catch
         @warn "Unable to retrieve audience from token."
