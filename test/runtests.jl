@@ -6,8 +6,8 @@ function running_on_azure()
     try
         HTTP.request(
             "GET",
-            "http://169.254.169.254/metadata/instance?api-version=2017-08-01",
-            Dict("Metadata"=>"true"))
+            "http://169.254.169.254/metadata/instance?api-version=2017-08-01";
+            headers = ["Metadata"=>"true"])
         return true
     catch
         return false
@@ -435,7 +435,7 @@ end
 AzSessions.write_manifest(;client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"], tenant=ENV["TENANT"], protocol="")
 
 @testset "AzSessions, retrywarn" begin
-    e = HTTP.StatusError(401, "GET", "https://foo", HTTP.Response(401, "body"))
+    e = HTTP.StatusError(401, HTTP.Response(401; body="body", request=HTTP.Request("GET", "http://something.domain.com")))
 
     io = IOBuffer()
     logger = ConsoleLogger(io, Logging.Info)
