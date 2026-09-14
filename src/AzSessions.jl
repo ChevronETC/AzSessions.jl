@@ -1,6 +1,6 @@
 module AzSessions
 
-using Base64, Dates, HTTP, JSON, JWTs, Logging, MbedTLS, Sockets
+using Base64, Dates, HTTP, JSON, JWTs, Logging, Sockets
 
 # handle transition from JSON <1 to JSON >=1
 JSONObject = isdefined(JSON, :Object) ? JSON.Object : Dict
@@ -99,7 +99,7 @@ end
 #
 # retry logic
 #
-function isretryable(e::HTTP.Exceptions.StatusError, s)
+function isretryable(e::HTTP.StatusError, s)
     e.status == 404 && (return true,s)
     e.status >= 500 && (return true,s)
 
@@ -123,13 +123,12 @@ function isretryable(e::HTTP.Exceptions.StatusError, s)
 
     false,s
 end
+isretryable(e::HTTP.ConnectError, s) = true,s
+isretryable(e::HTTP.TimeoutError, s) = true,s
 isretryable(e::Base.IOError, s) = true,s
-isretryable(e::HTTP.Exceptions.ConnectError, s) = true,s
-isretryable(e::HTTP.Exceptions.RequestError, s) = true,s
-isretryable(e::HTTP.Exceptions.TimeoutError, s) = true,s
-isretryable(e::MbedTLS.MbedException, s) = true,s
 isretryable(e::Base.EOFError, s) = true,s
 isretryable(e::Sockets.DNSError, s) = true,s
+isretryable(e::Exception, s) = HTTP.isrecoverable(e),s
 isretryable(e, s) = false,s
 
 function retrywarn(i, s, e)
@@ -237,7 +236,7 @@ function token(session::AzClientCredentialsSession; offset=Second(rand(300:600))
         "POST",
         "https://login.microsoft.com/$(session.tenant)/oauth2/token",
         ["Content-Type" => "application/x-www-form-urlencoded"],
-        "grant_type=client_credentials&client_id=$(session.client_id)&client_secret=$(HTTP.escapeuri(session.client_secret))&resource=$(HTTP.escapeuri(session.resource))",
+        "grant_type=client_credentials&client_id=$(session.client_id)&client_secret=$(HTTP.escapeuri(session.client_secret))&resource=$(HTTP.escapeuri(session.resource))";
         retry = false)
 
     rbody = JSON.parse(String(r.body))
@@ -294,7 +293,7 @@ function token(session::AzVMSession; offset=Second(rand(300:600)))
     r = @retry 10 HTTP.request(
         "GET",
         "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$(session.resource)",
-        ["Metadata"=>"true"],
+        ["Metadata"=>"true"];
         retry = false)
 
     rbody = JSON.parse(String(r.body))
@@ -411,7 +410,7 @@ end
 function audience_from_token(token)
     local audience
     try
-        decodedJWT = claims(JWT(;jwt=token))
+        decodedJWT = JWTs.claims(JWTs.JWT(;jwt=token))
         audience = get(decodedJWT, "aud", "")
     catch
         @warn "Unable to retrieve audience from token."
@@ -457,22 +456,21 @@ function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(r
     @debug "starting server..."
     local server
     try
-        server = Sockets.listen(Sockets.localhost, port)
+        with_logger(NullLogger()) do
+            server = HTTP.serve!(string(Sockets.localhost), port) do request::HTTP.Request
+                queries = split(parse(HTTP.URI, request.target).query, '&')
+                for query in queries
+                    q = split(query, '=')
+                    if q[1] == "code"
+                        auth_code = q[2]
+                        break
+                    end
+                end
+                HTTP.Response(200, "Logged in via AzSessions.jl")
+            end
+        end
     catch
         error("AzSessions: there is already a server listening on port $port")
-    end
-    with_logger(NullLogger()) do
-        tsk = @async HTTP.serve(Sockets.localhost, port; server=server) do request::HTTP.Request
-            queries = split(parse(HTTP.URI, request.target).query, '&')
-            for query in queries
-                q = split(query, '=')
-                if q[1] == "code"
-                    auth_code = q[2]
-                    break
-                end
-            end
-            HTTP.Response(200, "Logged in via AzSessions.jl")
-        end
     end
 
     authcode_uri = "https://login.microsoft.com/$(session.tenant)/oauth2/v2.0/authorize?client_id=$(session.client_id)&response_type=code&redirect_uri=$(session.redirect_uri)&response_mode=query&scope=$(session.scope_auth)&state=$state&prompt=select_account"
