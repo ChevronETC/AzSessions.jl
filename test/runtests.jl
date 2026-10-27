@@ -1,4 +1,4 @@
-using AzSessions, Dates, HTTP, JSON, JWTs, Logging, Test
+using AzSessions, Base64, Dates, HTTP, JSON, JWTs, Logging, Test
 
 AzSessions.write_manifest(;client_id=ENV["CLIENT_ID"], client_secret=ENV["CLIENT_SECRET"], tenant=ENV["TENANT"])
 
@@ -182,7 +182,6 @@ end
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
-    @test session.lock == _session.lock
     @test session.redirect_uri == _session.redirect_uri
     @test session.refresh_token == _session.refresh_token
     @test session.scope_auth == _session.scope_auth
@@ -196,7 +195,6 @@ end
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
-    @test session.lock == _session.lock
     @test session.redirect_uri == _session.redirect_uri
     @test session.refresh_token == _session.refresh_token
     @test session.scope_auth == _session.scope_auth
@@ -225,7 +223,6 @@ end
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
-    @test session.lock == _session.lock
     @test session.refresh_token == _session.refresh_token
     @test session.scope == _session.scope
     @test session.scope_auth == _session.scope_auth
@@ -238,7 +235,6 @@ end
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
-    @test session.lock == _session.lock
     @test session.refresh_token == _session.refresh_token
     @test session.scope == _session.scope
     @test session.scope_auth == _session.scope_auth
@@ -301,7 +297,6 @@ end
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
-    @test session.lock == _session.lock
     @test session.redirect_uri == _session.redirect_uri
     @test session.refresh_token == _session.refresh_token
     @test session.scope_auth == _session.scope_auth
@@ -329,12 +324,46 @@ end
     @test session.client_id == _session.client_id
     @test session.expiry == _session.expiry
     @test session.id_token == _session.id_token
-    @test session.lock == _session.lock
     @test session.refresh_token == _session.refresh_token
     @test session.scope == _session.scope
     @test session.scope_auth == _session.scope_auth
     @test session.tenant == _session.tenant
     @test session.token == _session.token
+end
+
+@testset "AzSessions, token cache stays readable by older versions" begin
+    session = AzSessions.AzDeviceCodeFlowSession(
+        "AzDeviceCodeFlowCredentials",
+        "myclientid",
+        now(),
+        "myidtoken",
+        false,
+        "myrefreshtoken",
+        "myscope",
+        "myscope_auth",
+        "mytenant",
+        "mytoken")
+
+    d = Dict{String,Any}(JSON.parse(JSON.json(session)))
+    @test d["lock"] == false # older AzSessions versions read this entry
+    delete!(d, "lock")
+    @test AzSession(d).token == "mytoken"
+end
+
+@testset "AzSessions, Device code flow, concurrent token calls" begin
+    # an unsigned token for the session's audience, so that token() returns it without contacting Azure
+    b64url(s) = rstrip(replace(base64encode(s), "+"=>"-", "/"=>"_"), '=')
+    jwt = join([b64url("""{"alg":"none","typ":"JWT"}"""), b64url("""{"aud":"https://storage.azure.com"}"""), "x"], ".")
+    scope = "openid+offline_access+https://storage.azure.com/user_impersonation"
+    session = AzSessions.AzDeviceCodeFlowSession("AzDeviceCodeFlowCredentials", "myclientid", now(Dates.UTC) + Hour(1), "", false, "", scope, scope, "mytenant", jwt)
+    @test token(session) == jwt # also compiles token(), so that the timing below is not affected
+
+    tokens = Vector{String}(undef, 16)
+    elapsed = @elapsed @sync for i in eachindex(tokens)
+        Threads.@spawn tokens[i] = token(session)
+    end
+    @test all(==(jwt), tokens)
+    @test elapsed < 0.5 # calls that overlapped used to wait a whole second
 end
 
 @testset "AzSessions, merge scopes" begin

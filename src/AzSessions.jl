@@ -325,7 +325,7 @@ mutable struct AzAuthCodeFlowSession <: AzSessionAbstract
     client_id::String
     expiry::DateTime
     id_token::String
-    lock::Bool
+    lock::Bool # not used; kept so that older AzSessions versions can read the token cache
     redirect_uri::String
     refresh_token::String
     scope::String
@@ -347,7 +347,7 @@ function AzAuthCodeFlowSession(d::Union{Dict,JSONObject})
         d["client_id"],
         DateTime(d["expiry"]),
         d["id_token"],
-        d["lock"],
+        false,
         d["redirect_uri"],
         d["refresh_token"],
         d["scope"],
@@ -363,7 +363,7 @@ function AzSession(session::AzAuthCodeFlowSession; scope="", lazy=false)
         session.client_id,
         session.expiry,
         session.id_token,
-        session.lock,
+        false,
         session.redirect_uri,
         session.refresh_token,
         scope,
@@ -380,7 +380,7 @@ function Base.copy(session::AzAuthCodeFlowSession)
         session.client_id,
         session.expiry,
         session.id_token,
-        session.lock,
+        false,
         session.redirect_uri,
         session.refresh_token,
         session.scope,
@@ -426,25 +426,17 @@ function audience_from_scope(scope)
 end
 
 function _token(session::AzAuthCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
-    while session.lock
-        sleep(1)
-    end
-    session.lock = true
-
     # use the existing token:
     if session.token != "" && now(Dates.UTC) < (session.expiry - offset) && audience_from_token(session.token) == audience_from_scope(session.scope)
-        session.lock = false
         return session.token
     end
 
     # use the refresh token to get a new token:
     if session.refresh_token != "" && refresh_token(session)
-        session.lock = false
         return session.token
     end
 
     if bootstrap_token_from_cache!(session, bootstrap; offset)
-        session.lock = false
         return ""
     end
 
@@ -536,7 +528,7 @@ mutable struct AzDeviceCodeFlowSession <: AzSessionAbstract
     client_id::String
     expiry::DateTime
     id_token::String
-    lock::Bool
+    lock::Bool # not used; kept so that older AzSessions versions can read the token cache
     refresh_token::String
     scope::String
     scope_auth::String
@@ -556,7 +548,7 @@ function AzDeviceCodeFlowSession(d::Union{Dict,JSONObject})
         d["client_id"],
         DateTime(d["expiry"]),
         d["id_token"],
-        d["lock"],
+        false,
         d["refresh_token"],
         d["scope"],
         d["scope_auth"],
@@ -571,7 +563,7 @@ function AzSession(session::AzDeviceCodeFlowSession; scope="", lazy=false)
         session.client_id,
         session.expiry,
         session.id_token,
-        session.lock,
+        false,
         session.refresh_token,
         scope,
         session.scope_auth,
@@ -587,7 +579,7 @@ function Base.copy(session::AzDeviceCodeFlowSession)
         session.client_id,
         session.expiry,
         session.id_token,
-        session.lock,
+        false,
         session.refresh_token,
         session.scope,
         session.scope_auth,
@@ -612,25 +604,17 @@ function update_session_from_cached_session!(session::AzDeviceCodeFlowSession, c
 end
 
 function _token(session::AzDeviceCodeFlowSession, bootstrap=false; offset=Second(rand(300:600)))
-    while session.lock
-        sleep(1)
-    end
-    session.lock = true
-
     # use the existing token:
     if session.token != "" && now(Dates.UTC) < (session.expiry - offset) && audience_from_scope(session.scope) == audience_from_token(session.token)
-        session.lock = false
         return session.token
     end
 
     # use the refresh token to get a new token:
     if session.refresh_token != "" && refresh_token(session)
-        session.lock = false
         return session.token
     end
 
     if bootstrap_token_from_cache!(session, bootstrap; offset)
-        session.lock = false
         return session.token
     end
 
@@ -734,7 +718,6 @@ function bootstrap_token_from_cache!(session, bootstrap; offset)
     if session_is_recorded
         if bootstrap == false
             update_session_from_cached_session!(session, cached_session)
-            session.lock = false
             token(session, true; offset)
             return true
         else
@@ -832,11 +815,16 @@ function delete_session(session)
     write_sessions(rsessions)
 end
 
+#=
+One lock per session object: concurrent token() calls on the same session wait for each other, and calls on
+different sessions do not.  The lock is reentrant, since token() calls itself while bootstrapping from the token
+cache.
+=#
+const _token_locks = WeakKeyDict{AzSessionAbstract,ReentrantLock}()
+
 function token(session::Union{AzAuthCodeFlowSession, AzDeviceCodeFlowSession}, bootstrap=false; offset=Second(rand(300:600)))
-    try
+    lock(get!(ReentrantLock, _token_locks, session)) do
         _token(session, bootstrap; offset)
-    finally
-        session.lock = false
     end
 end
 
